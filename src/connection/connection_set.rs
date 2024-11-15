@@ -1,8 +1,8 @@
+use crate::connection::connection_id::ConnectionId;
+use crate::connection::Connection;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
-use crate::connection::Connection;
-use crate::connection::connection_id::ConnectionId;
 
 pub type SafeConnectionList = Arc<Mutex<Vec<Connection>>>;
 
@@ -51,7 +51,7 @@ impl ConnectionSet {
         by_uuid.push(connection);
         true
     }
-    
+
     pub fn remove(&mut self, connection: &Connection) {
         self.connections.remove(&connection.id);
         let remove = if let Some(by_uuid_arc) = self.connections_by_user_id.get(&connection.user_uuid) {
@@ -60,15 +60,19 @@ impl ConnectionSet {
                 by_uuid.swap_remove(old_pos);
             }
             by_uuid.is_empty()
-        } else { 
-            false 
+        } else {
+            false
         };
         if remove {
             self.connections_by_user_id.remove(&connection.user_uuid);
         }
     }
-    
+
     pub fn len(&self) -> usize {
         self.connections.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Connection> {
+        self.connections.values()
     }
 }

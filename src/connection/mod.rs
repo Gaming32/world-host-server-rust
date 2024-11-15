@@ -1,7 +1,7 @@
+use crate::connection::connection_id::ConnectionId;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
-use crate::connection::connection_id::ConnectionId;
 
 pub mod connection_set;
 pub mod connection_id;
@@ -14,4 +14,5 @@ pub struct Connection {
 }
 
 pub struct LiveConnection {
+    pub country: Option<String>,
 }

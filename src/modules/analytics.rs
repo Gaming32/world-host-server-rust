@@ -1,14 +1,15 @@
-use chrono::{DateTime, Local};
+use crate::server_state::ServerState;
+use chrono::Local;
 use log::{error, info};
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Duration;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{interval_at, Instant, MissedTickBehavior};
 use try_catch::catch;
 
-pub async fn run_analytics(analytics_time: Duration) {
+pub async fn run_analytics(server: &ServerState) {
+    let analytics_time = server.config.analytics_time;
     if analytics_time.is_zero() {
         return info!("Analytics disabled by request");
     }
@@ -30,9 +31,20 @@ pub async fn run_analytics(analytics_time: Duration) {
         }
         info!("Updating analytics.csv");
         let timestamp = Local::now().format("%+");
-        #[allow(unused_mut)] let mut total = 0;
-        let by_country: HashMap<String, u32> = HashMap::new();
-        // TODO: Implement analytics and remove above explicit args
+        let mut total = 0;
+        let mut by_country = HashMap::new();
+        {
+            let connections = server.connections.lock().await;
+            for connection in connections.iter() {
+                let live = connection.live.lock().await;
+                if let Some(country) = &live.country {
+                    by_country.entry(country.to_string())
+                        .and_modify(|count| *count += 1)
+                        .or_insert(1);
+                }
+                total += 1;
+            }
+        }
         let country_string = by_country.into_iter()
             .map(|(country, count)| format!("{country}:{count}"))
             .collect::<Vec<String>>()
@@ -43,7 +55,7 @@ pub async fn run_analytics(analytics_time: Duration) {
                     .append(true)
                     .open(path)
                     .await?
-                    .write(format!("{timestamp},{total},{country_string}\n").as_bytes())
+                    .write_all(format!("{timestamp},{total},{country_string}\n").as_bytes())
                     .await?;
             } catch error {
                 error!("Failed to write to analytics.csv: {error}");

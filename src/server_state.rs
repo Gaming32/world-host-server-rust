@@ -1,12 +1,15 @@
-use std::time::Duration;
-use log::{info, warn};
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpStream;
-use tokio::time::sleep;
-use try_catch::catch;
+use crate::connection::connection_set::ConnectionSet;
 use crate::json_data::ExternalProxy;
 use crate::modules::analytics::run_analytics;
 use crate::SERVER_VERSION;
+use log::{info, warn};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
+use tokio::sync::Mutex;
+use tokio::time::sleep;
+use try_catch::catch;
 
 #[derive(Debug)]
 pub struct FullServerConfig {
@@ -19,13 +22,15 @@ pub struct FullServerConfig {
 }
 
 pub struct ServerState {
-    config: FullServerConfig,
+    pub config: FullServerConfig,
+    pub connections: Mutex<ConnectionSet>
 }
 
 impl ServerState {
     pub fn new(config: FullServerConfig) -> Self {
         Self {
-            config
+            config,
+            connections: Mutex::new(ConnectionSet::new())
         }
     }
 
@@ -34,9 +39,10 @@ impl ServerState {
 
         self.ping_external_servers();
 
-        let analytics_time = self.config.analytics_time;
+        let state = Arc::new(self);
+        let cloned_state = state.clone();
         tokio::spawn(async move {
-            run_analytics(analytics_time).await;
+            run_analytics(cloned_state.as_ref()).await;
         });
 
         sleep(Duration::from_secs(30)).await;
