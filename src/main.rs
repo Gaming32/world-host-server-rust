@@ -7,8 +7,6 @@ mod modules;
 mod server_state;
 
 use crate::cli::args::Args;
-use crate::connection::connection_set::ConnectionSet;
-use crate::connection::{Connection, LiveConnection};
 use crate::json_data::ExternalProxy;
 use crate::server_state::{FullServerConfig, ServerState};
 use clap::Parser;
@@ -18,12 +16,9 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::process::exit;
-use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
 use tokio::time::sleep;
-use uuid::Uuid;
 
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 

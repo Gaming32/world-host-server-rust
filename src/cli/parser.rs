@@ -19,6 +19,6 @@ impl TypedValueParser for DurationValueParser {
     ) -> Result<Self::Value, Error> {
         StringValueParser::new()
             .parse_ref(cmd, arg, value)
-            .and_then(|value| parse(&*value).map_err(|message| Error::raw(Format, message)))
+            .and_then(|value| parse(&value).map_err(|message| Error::raw(Format, message)))
     }
 }
