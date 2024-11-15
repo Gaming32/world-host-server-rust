@@ -1,5 +1,5 @@
 [package]
-name = "world-host-server-rust"
+name = "world-host-server"
 version = "0.1.0"
 edition = "2021"
 description = "Server software for World Host"
@@ -8,6 +8,9 @@ description = "Server software for World Host"
 # Utilities
 chrono = "0.4"
 try-catch = "0.2"
+lazy_static = "1.5"
+case_insensitive_hashmap = "1.0"
+unicase = "2.8"
 
 # Logging
 log = "0.4"
@@ -24,3 +27,4 @@ serde_yaml = "0.9"
 
 # Application
 tokio = { version = "1.41", features = ["full"] }
+uuid = "1.11"

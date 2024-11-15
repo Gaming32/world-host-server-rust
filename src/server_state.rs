@@ -19,7 +19,7 @@ pub struct FullServerConfig {
 }
 
 pub struct ServerState {
-    pub config: FullServerConfig,
+    config: FullServerConfig,
 }
 
 impl ServerState {
@@ -31,17 +31,17 @@ impl ServerState {
 
     pub async fn run(self) {
         info!("Starting world-host-server {SERVER_VERSION} with {:?}", self.config);
-        
+
         self.ping_external_servers();
 
         let analytics_time = self.config.analytics_time;
         tokio::spawn(async move {
             run_analytics(analytics_time).await;
         });
-        
+
         sleep(Duration::from_secs(30)).await;
     }
-    
+
     fn ping_external_servers(&self) {
         if let Some(servers) = &self.config.external_servers {
             for proxy in servers {

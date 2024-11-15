@@ -4,27 +4,32 @@ mod lat_long;
 mod server_state;
 mod modules;
 mod logging;
+mod connection;
 
 use crate::cli::args::Args;
 use crate::json_data::ExternalProxy;
 use crate::server_state::{FullServerConfig, ServerState};
 use clap::Parser;
+use log::{error, info};
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::process::exit;
-use log::{error, info};
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex;
 use tokio::time::sleep;
+use uuid::Uuid;
+use crate::connection::{Connection, LiveConnection};
+use crate::connection::connection_set::ConnectionSet;
 
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() {
     let args = Args::parse();
     logging::init_logging(args.log_config);
-    
     let mut base_addr = args.base_addr;
 
     let external_servers = read_external_servers().unwrap_or_else(|error| {
