@@ -38,14 +38,16 @@ pub async fn run_analytics(server: &ServerState) {
             for connection in connections.iter() {
                 let live = connection.live.lock().await;
                 if let Some(country) = &live.country {
-                    by_country.entry(country.to_string())
+                    by_country
+                        .entry(country.to_string())
                         .and_modify(|count| *count += 1)
                         .or_insert(1);
                 }
                 total += 1;
             }
         }
-        let country_string = by_country.into_iter()
+        let country_string = by_country
+            .into_iter()
             .map(|(country, count)| format!("{country}:{count}"))
             .collect::<Vec<String>>()
             .join(";");

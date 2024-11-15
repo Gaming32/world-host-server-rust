@@ -32,14 +32,16 @@ impl ConnectionSet {
 
     pub fn add(&mut self, connection: Connection) -> bool {
         if self.connections.contains_key(&connection.id) {
-            return false
+            return false;
         }
         self.add_force(connection)
     }
 
     pub fn add_force(&mut self, connection: Connection) -> bool {
         let old = self.connections.insert(connection.id, connection.clone());
-        let by_uuid_arc = self.connections_by_user_id.entry(connection.user_uuid)
+        let by_uuid_arc = self
+            .connections_by_user_id
+            .entry(connection.user_uuid)
             .or_insert_with(|| Arc::new(Mutex::new(Vec::new())))
             .clone();
         let mut by_uuid = by_uuid_arc.lock().unwrap();
@@ -54,15 +56,16 @@ impl ConnectionSet {
 
     pub fn remove(&mut self, connection: &Connection) {
         self.connections.remove(&connection.id);
-        let remove = if let Some(by_uuid_arc) = self.connections_by_user_id.get(&connection.user_uuid) {
-            let mut by_uuid = by_uuid_arc.lock().unwrap();
-            if let Some(old_pos) = by_uuid.iter().position(|x| x.id == connection.id) {
-                by_uuid.swap_remove(old_pos);
-            }
-            by_uuid.is_empty()
-        } else {
-            false
-        };
+        let remove =
+            if let Some(by_uuid_arc) = self.connections_by_user_id.get(&connection.user_uuid) {
+                let mut by_uuid = by_uuid_arc.lock().unwrap();
+                if let Some(old_pos) = by_uuid.iter().position(|x| x.id == connection.id) {
+                    by_uuid.swap_remove(old_pos);
+                }
+                by_uuid.is_empty()
+            } else {
+                false
+            };
         if remove {
             self.connections_by_user_id.remove(&connection.user_uuid);
         }

@@ -1,12 +1,14 @@
 mod cli;
+mod connection;
 mod json_data;
 mod lat_long;
-mod server_state;
-mod modules;
 mod logging;
-mod connection;
+mod modules;
+mod server_state;
 
 use crate::cli::args::Args;
+use crate::connection::connection_set::ConnectionSet;
+use crate::connection::{Connection, LiveConnection};
 use crate::json_data::ExternalProxy;
 use crate::server_state::{FullServerConfig, ServerState};
 use clap::Parser;
@@ -22,8 +24,6 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::time::sleep;
 use uuid::Uuid;
-use crate::connection::{Connection, LiveConnection};
-use crate::connection::connection_set::ConnectionSet;
 
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -70,8 +70,10 @@ fn main() {
             in_java_port: args.in_java_port,
             ex_java_port: args.ex_java_port.unwrap_or(args.in_java_port),
             analytics_time: args.analytics_time,
-            external_servers
-        }).run().await;
+            external_servers,
+        })
+        .run()
+        .await;
     });
 }
 

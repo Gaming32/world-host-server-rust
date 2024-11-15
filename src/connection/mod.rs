@@ -3,8 +3,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-pub mod connection_set;
 pub mod connection_id;
+pub mod connection_set;
 
 #[derive(Clone)]
 pub struct Connection {

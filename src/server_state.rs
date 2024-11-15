@@ -23,19 +23,22 @@ pub struct FullServerConfig {
 
 pub struct ServerState {
     pub config: FullServerConfig,
-    pub connections: Mutex<ConnectionSet>
+    pub connections: Mutex<ConnectionSet>,
 }
 
 impl ServerState {
     pub fn new(config: FullServerConfig) -> Self {
         Self {
             config,
-            connections: Mutex::new(ConnectionSet::new())
+            connections: Mutex::new(ConnectionSet::new()),
         }
     }
 
     pub async fn run(self) {
-        info!("Starting world-host-server {SERVER_VERSION} with {:?}", self.config);
+        info!(
+            "Starting world-host-server {SERVER_VERSION} with {:?}",
+            self.config
+        );
 
         self.ping_external_servers();
 

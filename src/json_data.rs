@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::lat_long::LatitudeLongitude;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ExternalProxy {

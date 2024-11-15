@@ -24,11 +24,11 @@ pub struct Args {
     /// Amount of time between analytics syncs
     #[arg(long, default_value = "0m", value_parser = DurationValueParser)]
     pub analytics_time: Duration,
-    
+
     /// The amount of time before the server automatically shuts down. Useful for restart scripts.
     #[arg(long, value_parser = DurationValueParser)]
     pub shutdown_time: Option<Duration>,
-    
+
     /// The path to a log4rs yaml logging configuration
     #[arg(long)]
     pub log_config: Option<String>,
