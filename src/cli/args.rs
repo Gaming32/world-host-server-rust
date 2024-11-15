@@ -1,6 +1,6 @@
 use crate::cli::parser::DurationValueParser;
-use std::time::Duration;
 use clap::Parser;
+use std::time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -28,4 +28,8 @@ pub struct Args {
     /// The amount of time before the server automatically shuts down. Useful for restart scripts.
     #[arg(long, value_parser = DurationValueParser)]
     pub shutdown_time: Option<Duration>,
+    
+    /// The path to a log4rs yaml logging configuration
+    #[arg(long)]
+    pub log_config: Option<String>,
 }
