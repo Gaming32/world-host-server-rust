@@ -5,6 +5,8 @@ mod json_data;
 mod lat_long;
 mod logging;
 mod modules;
+mod protocol;
+mod serialization;
 mod server_state;
 
 use crate::cli::args::Args;

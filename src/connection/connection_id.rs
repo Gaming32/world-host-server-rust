@@ -1,3 +1,4 @@
+use crate::serialization::serializable::PacketSerializable;
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use lazy_static::lazy_static;
 use std::error::Error;
@@ -63,6 +64,12 @@ impl Display for ConnectionId {
             "{}-{}-{}",
             WORDS_FOR_CID[first], WORDS_FOR_CID[second], WORDS_FOR_CID[third]
         ))
+    }
+}
+
+impl PacketSerializable for ConnectionId {
+    fn serialize_to(&self, buf: &mut Vec<u8>) {
+        self.0.serialize_to(buf)
     }
 }
 
