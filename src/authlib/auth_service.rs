@@ -1,7 +1,6 @@
 use crate::authlib::environment::{Environment, PROD_ENVIRONMENT};
 use crate::authlib::session_service::YggdrasilMinecraftSessionService;
 use log::info;
-use reqwest::Proxy;
 
 pub struct YggdrasilAuthenticationService<'a> {
     environment: Environment<'a>,
