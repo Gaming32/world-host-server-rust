@@ -11,6 +11,7 @@ try-catch = "0.2"
 lazy_static = "1.5"
 case_insensitive_hashmap = "1.0"
 unicase = "2.8"
+anyhow = "1.0"
 
 # Logging
 log = "0.4"
@@ -25,6 +26,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 
+# Authlib
+reqwest = { version = "0.12", features = ["json"] }
+querystring = "1.1"
+
 # Application
 tokio = { version = "1.41", features = ["full"] }
-uuid = "1.11"
+uuid = { version = "1.11", features = ["serde"] }

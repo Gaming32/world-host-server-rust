@@ -1,6 +1,7 @@
 use crate::connection::connection_set::ConnectionSet;
 use crate::json_data::ExternalProxy;
 use crate::modules::analytics::run_analytics;
+use crate::modules::main_server::run_main_server;
 use crate::SERVER_VERSION;
 use log::{info, warn};
 use std::sync::Arc;
@@ -48,7 +49,7 @@ impl ServerState {
             run_analytics(cloned_state.as_ref()).await;
         });
 
-        sleep(Duration::from_secs(30)).await;
+        run_main_server(state.as_ref()).await;
     }
 
     fn ping_external_servers(&self) {

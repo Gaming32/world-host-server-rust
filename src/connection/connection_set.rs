@@ -26,7 +26,7 @@ impl ConnectionSet {
     pub fn by_user_id(&self, user_id: Uuid) -> Vec<Connection> {
         match self.connections_by_user_id.get(&user_id) {
             Some(connections) => connections.clone().lock().unwrap().clone(),
-            None => Vec::new(),
+            None => Vec::default(),
         }
     }
 

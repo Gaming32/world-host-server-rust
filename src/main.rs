@@ -1,3 +1,4 @@
+mod authlib;
 mod cli;
 mod connection;
 mod json_data;
