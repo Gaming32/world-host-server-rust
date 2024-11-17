@@ -36,19 +36,13 @@ impl PacketSerializable for Uuid {
     }
 }
 
-impl PacketSerializable for &str {
-    fn serialize_to(&self, buf: &mut Vec<u8>) {
-        buf.write_all(self.as_ref()).unwrap()
-    }
-}
-
-impl PacketSerializable for &Vec<u8> {
+impl PacketSerializable for Vec<u8> {
     fn serialize_to(&self, buf: &mut Vec<u8>) {
         buf.write_all(self).unwrap()
     }
 }
 
-impl PacketSerializable for &String {
+impl PacketSerializable for String {
     fn serialize_to(&self, buf: &mut Vec<u8>) {
         buf.write_all(self.as_bytes()).unwrap()
     }

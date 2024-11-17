@@ -6,16 +6,16 @@ use crate::serialization::serializable::PacketSerializable;
 use std::net::IpAddr;
 use uuid::Uuid;
 
-pub enum WorldHostS2CMessage<'a> {
+pub enum WorldHostS2CMessage {
     Error {
-        message: &'a str,
+        message: String,
         critical: bool,
     },
     IsOnlineTo {
         user: Uuid,
     },
     OnlineGame {
-        host: &'a String,
+        host: String,
         port: u16,
         owner_cid: ConnectionId,
     },
@@ -44,11 +44,12 @@ pub enum WorldHostS2CMessage<'a> {
     #[deprecated = "QueryResponse uses an old format. NewQueryResponse should be used instead."]
     QueryResponse {
         friend: Uuid,
-        data: &'a Vec<u8>,
+        length: u32,
+        data: Vec<u8>,
     },
     ProxyC2SPacket {
         connection_id: u64,
-        data: &'a Vec<u8>,
+        data: Vec<u8>,
     },
     ProxyConnect {
         connection_id: u64,
@@ -59,36 +60,36 @@ pub enum WorldHostS2CMessage<'a> {
     },
     ConnectionInfo {
         connection_id: ConnectionId,
-        base_ip: &'a String,
+        base_ip: String,
         base_port: u16,
-        user_ip: &'a String,
+        user_ip: String,
         protocol_version: u32,
         punch_port: u16,
     },
     ExternalProxyServer {
-        host: &'a String,
+        host: String,
         port: u16,
-        base_addr: &'a String,
+        base_addr: String,
         mc_port: u16,
     },
     OutdatedWorldHost {
-        recommended_version: &'a str,
+        recommended_version: String,
     },
     ConnectionNotFound {
         connection_id: ConnectionId,
     },
     NewQueryResponse {
         friend: Uuid,
-        data: &'a Vec<u8>,
+        data: Vec<u8>,
     },
     Warning {
-        message: &'a str,
+        message: String,
         important: bool,
     },
     PunchOpenRequest {
         punch_id: Uuid,
-        purpose: &'a String,
-        from_host: &'a String,
+        purpose: String,
+        from_host: String,
         from_port: u16,
         connection_id: ConnectionId,
         user: Uuid,
@@ -99,7 +100,7 @@ pub enum WorldHostS2CMessage<'a> {
     },
     PortLookupSuccess {
         lookup_id: Uuid,
-        host: &'a String,
+        host: String,
         port: u16,
     },
     PunchRequestCancelled {
@@ -107,12 +108,12 @@ pub enum WorldHostS2CMessage<'a> {
     },
     PunchSuccess {
         punch_id: Uuid,
-        host: &'a String,
+        host: String,
         port: u16,
     },
 }
 
-impl WorldHostS2CMessage<'_> {
+impl WorldHostS2CMessage {
     #[allow(deprecated)]
     pub fn type_id(&self) -> u8 {
         use WorldHostS2CMessage::*;
@@ -174,9 +175,9 @@ impl WorldHostS2CMessage<'_> {
     }
 }
 
-impl FieldedSerializer for WorldHostS2CMessage<'_> {
+impl FieldedSerializer for WorldHostS2CMessage {
     #[allow(deprecated)]
-    fn fields(&self) -> Vec<Box<dyn PacketSerializable + '_>> {
+    fn fields(&self) -> Vec<Box<&(dyn PacketSerializable + '_)>> {
         use WorldHostS2CMessage::*;
         match self {
             Error { message, critical } => serial_fields!(message, critical),
@@ -206,7 +207,11 @@ impl FieldedSerializer for WorldHostS2CMessage<'_> {
                 connection_id,
                 security,
             } => serial_fields!(friend, connection_id, security),
-            QueryResponse { friend, data } => serial_fields!(friend, &(data.len() as u32), data),
+            QueryResponse {
+                friend,
+                length,
+                data,
+            } => serial_fields!(friend, length, data),
             ProxyC2SPacket {
                 connection_id,
                 data,

@@ -11,6 +11,7 @@ mod protocol;
 mod ratelimit;
 mod serialization;
 mod server_state;
+mod socket_wrapper;
 mod util;
 
 use crate::cli::args::Args;

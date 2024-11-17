@@ -43,12 +43,15 @@ impl ServerState {
         self.ping_external_servers();
 
         let state = Arc::new(self);
-        let cloned_state = state.clone();
-        tokio::spawn(async move {
-            run_analytics(cloned_state.as_ref()).await;
-        });
 
-        run_main_server(state.as_ref()).await;
+        {
+            let state = state.clone();
+            tokio::spawn(async move {
+                run_analytics(state.as_ref()).await;
+            });
+        }
+
+        run_main_server(state).await;
     }
 
     fn ping_external_servers(&self) {

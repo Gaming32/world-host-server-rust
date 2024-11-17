@@ -1,4 +1,5 @@
 use crate::serialization::serializable::PacketSerializable;
+use anyhow::bail;
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use lazy_static::lazy_static;
 use std::error::Error;
@@ -8,6 +9,7 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use unicase::UniCase;
 
+const MAX_CONNECTION_IDS: u64 = 1 << 42;
 const WORD_SHIFT: u8 = 14;
 const WORD_MASK: u64 = (1 << WORD_SHIFT) - 1;
 
@@ -26,6 +28,16 @@ lazy_static! {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ConnectionId(u64);
+
+impl ConnectionId {
+    pub fn new(id: u64) -> anyhow::Result<Self> {
+        if (0..MAX_CONNECTION_IDS).contains(&id) {
+            Ok(ConnectionId(id))
+        } else {
+            bail!("Connection ID {id} out of range")
+        }
+    }
+}
 
 impl FromStr for ConnectionId {
     type Err = ParseConnectionIdError;

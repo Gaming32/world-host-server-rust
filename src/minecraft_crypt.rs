@@ -1,8 +1,10 @@
+use log::error;
 use rand::SeedableRng;
 use rsa::pkcs8::EncodePublicKey;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 use sha1::Digest;
 use std::ops::Deref;
+use std::process::exit;
 
 pub struct RsaKeyPair {
     pub private: RsaPrivateKey,
@@ -12,7 +14,10 @@ pub struct RsaKeyPair {
 pub fn generate_key_pair() -> RsaKeyPair {
     let mut rng = rand::rngs::StdRng::from_entropy();
     let bits = 1024;
-    let private = RsaPrivateKey::new(&mut rng, bits).expect("Failed to generate private key");
+    let private = RsaPrivateKey::new(&mut rng, bits).unwrap_or_else(|error| {
+        error!("Failed to generate key pair: {error}");
+        exit(1);
+    });
     let public = RsaPublicKey::from(&private);
     RsaKeyPair { public, private }
 }

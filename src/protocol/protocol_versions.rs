@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 
 pub const CURRENT: u32 = 7;
 pub const STABLE: u32 = 7;
-pub const SUPPORTED: RangeInclusive<u32> = CURRENT..=STABLE;
+pub const SUPPORTED: RangeInclusive<u32> = 2..=CURRENT;
 
 pub const NEW_AUTH_PROTOCOL: u32 = 6;
 pub const ENCRYPTED_PROTOCOL: u32 = 7;

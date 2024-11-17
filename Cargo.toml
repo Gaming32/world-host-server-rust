@@ -42,3 +42,4 @@ sha1 = "0.10"
 # Application
 tokio = { version = "1.41", features = ["full"] }
 uuid = { version = "1.11", features = ["serde"] }
+socket2 = "0.5"
