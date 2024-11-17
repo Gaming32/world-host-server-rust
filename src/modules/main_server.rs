@@ -1,4 +1,5 @@
 use crate::authlib::auth_service::YggdrasilAuthenticationService;
+use crate::minecraft_crypt;
 use crate::server_state::ServerState;
 use crate::util::ip_info_map::IpInfoMap;
 use log::{error, info};
@@ -7,6 +8,11 @@ use std::time::Instant;
 pub async fn run_main_server(server: &ServerState) {
     let session_service = YggdrasilAuthenticationService::new().create_session_service();
     let ip_info_map = load_ip_info_map().await;
+
+    info!("Generating key pair");
+    let key_pair = minecraft_crypt::generate_key_pair();
+
+    info!("Staring World Host server on port {}", server.config.port);
 }
 
 async fn load_ip_info_map() -> IpInfoMap {

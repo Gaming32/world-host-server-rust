@@ -5,6 +5,7 @@ mod country_code;
 mod json_data;
 mod lat_long;
 mod logging;
+mod minecraft_crypt;
 mod modules;
 mod protocol;
 mod serialization;
