@@ -1,5 +1,5 @@
 use crate::USER_AGENT;
-use reqwest::Url;
+use reqwest::IntoUrl;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 
@@ -18,7 +18,7 @@ impl MinecraftClient {
         MinecraftClient { client }
     }
 
-    pub async fn get<T: DeserializeOwned>(&self, url: Url) -> anyhow::Result<Option<T>> {
+    pub async fn get<T: DeserializeOwned, U: IntoUrl>(&self, url: U) -> anyhow::Result<Option<T>> {
         let response = self.client.get(url).send().await?;
         let status = response.status();
         if status.as_u16() < 400 {

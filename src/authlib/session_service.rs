@@ -28,10 +28,9 @@ impl YggdrasilMinecraftSessionService {
         server_id: &str,
     ) -> anyhow::Result<Option<Uuid>> {
         let arguments = vec![("username", profile_name), ("serverId", server_id)];
-        let url: Url =
-            format!("{}{}", self.check_url, querystring::stringify(arguments)).parse()?;
+        let url = format!("{}?{}", self.check_url, querystring::stringify(arguments));
         self.client
-            .get::<HasJoinedMinecraftServerResponse>(url)
+            .get::<HasJoinedMinecraftServerResponse, _>(url)
             .await
             .map(|o| o.map(|r| r.id))
     }

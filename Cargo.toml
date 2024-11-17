@@ -39,6 +39,10 @@ rsa = "0.9"
 rand = "0.8"
 sha1 = "0.10"
 
+# Funny handshake libraries
+num-bigint = "0.4"
+md-5 = "0.10"
+
 # Application
 tokio = { version = "1.41", features = ["full"] }
 uuid = { version = "1.11", features = ["serde"] }
