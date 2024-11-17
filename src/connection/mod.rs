@@ -1,4 +1,5 @@
 use crate::connection::connection_id::ConnectionId;
+use crate::country_code::CountryCode;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -14,5 +15,5 @@ pub struct Connection {
 }
 
 pub struct LiveConnection {
-    pub country: Option<String>,
+    pub country: Option<CountryCode>,
 }

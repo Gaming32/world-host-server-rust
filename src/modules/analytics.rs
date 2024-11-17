@@ -37,9 +37,9 @@ pub async fn run_analytics(server: &ServerState) {
             let connections = server.connections.lock().await;
             for connection in connections.iter() {
                 let live = connection.live.lock().await;
-                if let Some(country) = &live.country {
+                if let Some(country) = live.country {
                     by_country
-                        .entry(country.to_string())
+                        .entry(country)
                         .and_modify(|count| *count += 1)
                         .or_insert(1);
                 }
@@ -48,7 +48,7 @@ pub async fn run_analytics(server: &ServerState) {
         }
         let country_string = by_country
             .into_iter()
-            .map(|(country, count)| format!("{country}:{count}"))
+            .map(|(country, count)| format!("{}:{count}", country))
             .collect::<Vec<String>>()
             .join(";");
         catch! {

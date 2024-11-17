@@ -1,3 +1,4 @@
+use crate::USER_AGENT;
 use reqwest::Url;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
@@ -11,6 +12,7 @@ impl MinecraftClient {
         let client = reqwest::ClientBuilder::new()
             .connect_timeout(Duration::from_millis(5000))
             .read_timeout(Duration::from_millis(5000))
+            .user_agent(USER_AGENT)
             .build()
             .unwrap();
         MinecraftClient { client }

@@ -1,6 +1,7 @@
 mod authlib;
 mod cli;
 mod connection;
+mod country_code;
 mod json_data;
 mod lat_long;
 mod logging;
@@ -8,6 +9,7 @@ mod modules;
 mod protocol;
 mod serialization;
 mod server_state;
+mod util;
 
 use crate::cli::args::Args;
 use crate::json_data::ExternalProxy;
@@ -24,6 +26,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::time::sleep;
 
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO_PKG_VERSION"));
 
 fn main() {
     let args = Args::parse();

@@ -16,7 +16,7 @@ impl<'a> YggdrasilAuthenticationService<'a> {
         YggdrasilAuthenticationService { environment }
     }
 
-    pub fn create_minecraft_session_service(&self) -> YggdrasilMinecraftSessionService {
+    pub fn create_session_service(&self) -> YggdrasilMinecraftSessionService {
         YggdrasilMinecraftSessionService::new(&self.environment)
     }
 }

@@ -12,8 +12,8 @@ pub struct ConnectionSet {
 }
 
 impl ConnectionSet {
-    pub fn new() -> ConnectionSet {
-        ConnectionSet {
+    pub fn new() -> Self {
+        Self {
             connections: HashMap::new(),
             connections_by_user_id: HashMap::new(),
         }
