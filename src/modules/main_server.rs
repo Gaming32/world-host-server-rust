@@ -12,9 +12,7 @@ use crate::socket_wrapper::SocketWrapper;
 use crate::util::ext::WHAsyncReadExt;
 use crate::util::ip_info_map::IpInfoMap;
 use log::{error, info, warn};
-use std::io;
-use std::net::{IpAddr, SocketAddr};
-use std::ops::Deref;
+use std::net::IpAddr;
 use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,7 +20,6 @@ use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio::time::{interval_at, Instant, MissedTickBehavior};
-use try_catch::catch;
 use uuid::Uuid;
 
 pub async fn run_main_server(server: Arc<ServerState>) {
@@ -90,7 +87,7 @@ pub async fn run_main_server(server: Arc<ServerState>) {
 
             let mut connection = None;
             if let Err(error) =
-                handle_connection_init(&*key_pair, socket, addr.ip(), &mut connection).await
+                handle_connection(&key_pair, socket, addr.ip(), &mut connection).await
             {
                 info!("Connection {} closed due to {error}", addr);
             }
@@ -137,7 +134,7 @@ async fn load_ip_info_map() -> IpInfoMap {
     }
 }
 
-async fn handle_connection_init(
+async fn handle_connection(
     key_pair: &RsaKeyPair,
     mut socket: SocketWrapper,
     remote_addr: IpAddr,
@@ -164,6 +161,7 @@ async fn handle_connection_init(
             return Ok(());
         }
     };
+    *connection_out = Some(connection);
 
     Ok(())
 }
