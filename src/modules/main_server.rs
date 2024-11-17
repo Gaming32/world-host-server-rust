@@ -200,11 +200,11 @@ async fn create_connection(
         id: handshake_result.connection_id,
         addr: remote_addr,
         user_uuid: handshake_result.user_id,
-        live: Mutex::new(LiveConnection {
+        live: Arc::new(Mutex::new(LiveConnection {
             socket,
             country: None,
             open: true,
-        }),
+        })),
     })
 }
 
