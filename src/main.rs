@@ -8,6 +8,7 @@ mod logging;
 mod minecraft_crypt;
 mod modules;
 mod protocol;
+mod ratelimit;
 mod serialization;
 mod server_state;
 mod util;
