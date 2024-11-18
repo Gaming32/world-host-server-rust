@@ -5,7 +5,7 @@ use crate::modules::main_server::run_main_server;
 use crate::SERVER_VERSION;
 use linked_hash_set::LinkedHashSet;
 use log::{info, warn};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
