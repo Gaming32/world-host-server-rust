@@ -7,6 +7,7 @@ use crate::protocol::protocol_versions;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::protocol::security::SecurityLevel;
 use crate::socket_wrapper::SocketWrapper;
+use std::collections::HashSet;
 use std::io;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -30,6 +31,7 @@ pub struct LiveConnection {
     pub country: Option<CountryCode>,
     pub external_proxy: Option<Arc<ExternalProxy>>,
     pub open: bool,
+    pub open_to_friends: HashSet<Uuid>,
     pub encrypt_cipher: Option<Aes128Cfb>,
     pub decrypt_cipher: Option<Aes128Cfb>,
 }

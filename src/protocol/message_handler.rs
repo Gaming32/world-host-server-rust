@@ -13,7 +13,7 @@ pub async fn handle_message(
     message: WorldHostC2SMessage,
     connection: &Connection,
     server: &ServerState,
-) -> anyhow::Result<()> {
+) {
     use WorldHostC2SMessage::*;
     match message {
         ListOnline { friends } => {
@@ -69,7 +69,12 @@ pub async fn handle_message(
             }
         }
         PublishedWorld { friends } => {
-            // TODO: Track online list
+            connection
+                .live
+                .lock()
+                .await
+                .open_to_friends
+                .extend(friends.iter());
             broadcast_to_friends(
                 connection,
                 server,
@@ -83,7 +88,12 @@ pub async fn handle_message(
             .await;
         }
         ClosedWorld { friends } => {
-            // TODO: Track online list
+            {
+                let open = &mut connection.live.lock().await.open_to_friends;
+                for friend in friends.iter() {
+                    open.remove(friend);
+                }
+            }
             broadcast_to_friends(
                 connection,
                 server,
@@ -104,7 +114,7 @@ pub async fn handle_message(
                     message: "Please use the v4+ RequestDirectJoin message instead of the unsupported RequestJoin message".to_string(),
                     critical: false
                 }).await;
-                return Ok(());
+                return;
             }
             let online = server.connections.lock().await.by_user_id(friend);
             if !online.is_empty() {
@@ -137,7 +147,7 @@ pub async fn handle_message(
                     },
                 )
                 .await;
-                return Ok(());
+                return;
             }
             if connection_id != connection.id {
                 if let Some(other) = server.connections.lock().await.by_id(connection_id) {
@@ -162,7 +172,7 @@ pub async fn handle_message(
             connection_id,
             data,
         } => {
-            return Box::pin(handle_message(
+            Box::pin(handle_message(
                 NewQueryResponse {
                     connection_id,
                     data,
@@ -194,7 +204,7 @@ pub async fn handle_message(
                         },
                     )
                     .await;
-                    return Ok(());
+                    return;
                 }
             }
             send_safely(
@@ -209,7 +219,7 @@ pub async fn handle_message(
             data,
         } => {
             if connection_id == connection.id {
-                return Ok(());
+                return;
             }
             if let Some(other) = server.connections.lock().await.by_id(connection_id) {
                 send_safely(
@@ -249,7 +259,7 @@ pub async fn handle_message(
                         &WorldHostS2CMessage::PunchRequestCancelled { punch_id },
                     )
                     .await;
-                    return Ok(());
+                    return;
                 }
                 send_safely(
                     connection,
@@ -310,7 +320,6 @@ pub async fn handle_message(
             }
         }
     }
-    Ok(())
 }
 
 async fn broadcast_to_friends(

@@ -4,6 +4,7 @@ use crate::connection::connection_id::ConnectionId;
 use crate::connection::{Connection, LiveConnection};
 use crate::minecraft_crypt;
 use crate::minecraft_crypt::{Aes128Cfb, RsaKeyPair};
+use crate::protocol::c2s_message::WorldHostC2SMessage;
 use crate::protocol::data_ext::WHAsyncReadExt;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::protocol::security::SecurityLevel;
@@ -19,6 +20,7 @@ use log::{debug, error, info, warn};
 use num_bigint::BigInt;
 use rand::RngCore;
 use rsa::pkcs8::EncodePublicKey;
+use std::collections::HashSet;
 use std::io;
 use std::net::IpAddr;
 use std::ops::DerefMut;
@@ -111,7 +113,21 @@ pub async fn run_main_server(server: Arc<ServerState>) {
                 connection.live.lock().await.open = false;
                 info!("Connection {} from {} closed", connection.id, addr);
                 state.server.connections.lock().await.remove(&connection);
-                // TODO: Broadcast ClosedWorld
+                message_handler::handle_message(
+                    WorldHostC2SMessage::ClosedWorld {
+                        friends: connection
+                            .live
+                            .lock()
+                            .await
+                            .open_to_friends
+                            .iter()
+                            .copied()
+                            .collect(),
+                    },
+                    &connection,
+                    &state.server,
+                )
+                .await;
                 info!(
                     "There are {} open connections.",
                     state.server.connections.lock().await.len()
@@ -302,13 +318,7 @@ async fn handle_connection(
         }
         let message = message?;
         debug!("Received message {message:?}");
-        if let Err(error) =
-            message_handler::handle_message(message, &connection, state.server.as_ref()).await
-        {
-            error!("A critical error occurred in client handling: {error}");
-            connection.close_error(error.to_string()).await;
-            return Err(error);
-        }
+        message_handler::handle_message(message, &connection, state.server.as_ref()).await;
     }
 }
 
@@ -389,6 +399,7 @@ async fn create_connection(
             country: None,
             external_proxy: None,
             open: true,
+            open_to_friends: HashSet::new(),
             encrypt_cipher,
             decrypt_cipher: handshake_result.decrypt_cipher,
         })),
