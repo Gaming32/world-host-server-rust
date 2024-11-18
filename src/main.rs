@@ -19,11 +19,12 @@ use crate::json_data::ExternalProxy;
 use crate::server_state::{FullServerConfig, ServerState};
 use clap::Parser;
 use log::{error, info};
-use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::process::exit;
+use std::sync::Arc;
+use std::{fs, io};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::sleep;
@@ -74,7 +75,8 @@ fn main() {
             in_java_port: args.in_java_port,
             ex_java_port: args.ex_java_port.unwrap_or(args.in_java_port),
             analytics_time: args.analytics_time,
-            external_servers,
+            external_servers: external_servers
+                .map(|servers| servers.into_iter().map(Arc::new).collect()),
         })
         .run()
         .await;
@@ -94,7 +96,7 @@ pub fn init_logging(log_config: Option<String>) {
     }
 }
 
-fn read_external_servers() -> std::io::Result<Option<Vec<ExternalProxy>>> {
+fn read_external_servers() -> io::Result<Option<Vec<ExternalProxy>>> {
     let path = Path::new("external_proxies.json");
     if !fs::exists(path)? {
         return Ok(None);

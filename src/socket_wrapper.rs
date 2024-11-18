@@ -26,7 +26,7 @@ impl SocketWrapper {
         self.0.flush().await
     }
 
-    pub async fn send_close_error(&mut self, message: String, cipher: Option<&mut Aes128Cfb>) {
+    pub async fn close_error(&mut self, message: String, cipher: Option<&mut Aes128Cfb>) {
         if let Err(error) = self
             .send_message(
                 WorldHostS2CMessage::Error {
@@ -39,9 +39,8 @@ impl SocketWrapper {
         {
             warn!("Error in critical error sending: {error}");
         }
-    }
-
-    pub async fn send_close_error_unencrypted(&mut self, message: String) {
-        self.send_close_error(message, None).await
+        if let Err(error) = self.0.shutdown().await {
+            warn!("Error shutting down socket: {error}");
+        }
     }
 }

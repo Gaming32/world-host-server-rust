@@ -7,6 +7,7 @@ use crate::minecraft_crypt::{Aes128Cfb, RsaKeyPair};
 use crate::protocol::data_ext::WHAsyncReadExt;
 use crate::protocol::protocol_versions;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
+use crate::protocol::security::SecurityLevel;
 use crate::ratelimit::bucket::RateLimitBucket;
 use crate::ratelimit::limiter::RateLimiter;
 use crate::server_state::ServerState;
@@ -24,15 +25,16 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+use tokio::task::yield_now;
 use tokio::time::{interval_at, Instant, MissedTickBehavior};
 use uuid::Uuid;
 
 pub async fn run_main_server(server: Arc<ServerState>) {
-    let session_service = Arc::new(YggdrasilAuthenticationService::new().create_session_service());
+    let session_service = YggdrasilAuthenticationService::new().create_session_service();
     let ip_info_map = load_ip_info_map().await;
 
     info!("Generating key pair");
-    let key_pair = Arc::new(minecraft_crypt::generate_key_pair());
+    let key_pair = minecraft_crypt::generate_key_pair();
 
     info!("Staring World Host server on port {}", server.config.port);
     let rate_limiter = Arc::new(RateLimiter::<IpAddr>::new(vec![
@@ -66,6 +68,12 @@ pub async fn run_main_server(server: Arc<ServerState>) {
         listener.local_addr().unwrap()
     );
 
+    let state = MainServerState {
+        server,
+        session_service: Arc::new(session_service),
+        key_pair: Arc::new(key_pair),
+        ip_info_map: Arc::new(ip_info_map),
+    };
     loop {
         let result = listener.accept().await;
         if let Err(error) = result {
@@ -78,43 +86,44 @@ pub async fn run_main_server(server: Arc<ServerState>) {
         }
 
         let rate_limiter = rate_limiter.clone();
-        let server = server.clone();
-        let session_service = session_service.clone();
-        let key_pair = key_pair.clone();
+        let state = state.clone();
         tokio::spawn(async move {
             let mut socket = SocketWrapper(socket);
             if let Some(limited) = rate_limiter.ratelimit(addr.ip()).await {
                 warn!("{} is reconnecting too quickly! {limited}", addr.ip());
-                socket
-                    .send_close_error_unencrypted(format!("Ratelimit exceeded! {limited}"))
-                    .await;
+                let message = format!("Ratelimit exceeded! {limited}");
+                socket.close_error(message, None).await;
                 return;
             }
 
             let mut connection = None;
-            if let Err(error) = handle_connection(
-                &session_service,
-                &key_pair,
-                socket,
-                addr.ip(),
-                &mut connection,
-            )
-            .await
+            if let Err(error) = handle_connection(&state, socket, addr.ip(), &mut connection).await
             {
                 info!("Connection {} closed due to {error}", addr);
+                if let Some(connection) = &connection {
+                    connection.close_error(error.to_string()).await;
+                }
             }
             if let Some(connection) = connection {
                 connection.live.lock().await.open = false;
                 info!("Connection {} from {} closed", connection.id, addr);
-                server.connections.lock().await.remove(&connection);
+                state.server.connections.lock().await.remove(&connection);
                 // TODO: Broadcast ClosedWorld
                 info!(
                     "There are {} open connections.",
-                    server.connections.lock().await.len()
+                    state.server.connections.lock().await.len()
                 );
             }
         });
     }
+}
+
+#[derive(Clone)]
+struct MainServerState {
+    server: Arc<ServerState>,
+    session_service: Arc<YggdrasilMinecraftSessionService>,
+    key_pair: Arc<RsaKeyPair>,
+    ip_info_map: Arc<IpInfoMap>,
 }
 
 async fn load_ip_info_map() -> IpInfoMap {
@@ -147,8 +156,7 @@ async fn load_ip_info_map() -> IpInfoMap {
 }
 
 async fn handle_connection(
-    session_service: &YggdrasilMinecraftSessionService,
-    key_pair: &RsaKeyPair,
+    state: &MainServerState,
     mut socket: SocketWrapper,
     remote_addr: IpAddr,
     connection_out: &mut Option<Connection>,
@@ -161,29 +169,126 @@ async fn handle_connection(
     let protocol_version = protocol_version?;
 
     if !protocol_versions::SUPPORTED.contains(&protocol_version) {
-        socket
-            .send_close_error_unencrypted(format!(
-                "Unsupported protocol version {protocol_version}"
-            ))
-            .await;
+        let message = format!("Unsupported protocol version {protocol_version}");
+        socket.close_error(message, None).await;
         return Ok(());
     }
 
-    let connection = match create_connection(
-        socket,
-        remote_addr,
-        session_service,
-        key_pair,
-        protocol_version,
-    )
-    .await
-    {
+    let connection = match create_connection(socket, remote_addr, state, protocol_version).await {
         Some(conn) => conn,
         None => {
             return Ok(());
         }
     };
-    *connection_out = Some(connection);
+    *connection_out = Some(connection.clone());
+
+    info!(
+        "Connection opened: {} ({}) from {}",
+        connection.id, connection.user_uuid, connection.addr
+    );
+
+    let latest_visible_protocol_version = if protocol_version <= protocol_versions::STABLE {
+        protocol_versions::STABLE
+    } else {
+        protocol_versions::CURRENT
+    };
+    connection
+        .send_message(WorldHostS2CMessage::ConnectionInfo {
+            connection_id: connection.id,
+            base_ip: state.server.config.base_addr.clone().unwrap_or_default(),
+            base_port: state.server.config.ex_java_port,
+            user_ip: remote_addr.to_string(),
+            protocol_version: latest_visible_protocol_version,
+            punch_port: 0,
+        })
+        .await?;
+    if protocol_version < latest_visible_protocol_version {
+        warn!(
+            "Client {} has an outdated client! Client version: {}. Server version: {} (stable {})",
+            connection.id,
+            protocol_version,
+            protocol_versions::CURRENT,
+            protocol_versions::STABLE
+        );
+        connection
+            .send_message(WorldHostS2CMessage::OutdatedWorldHost {
+                recommended_version: protocol_versions::get_version_name(
+                    latest_visible_protocol_version,
+                )
+                .to_string(),
+            })
+            .await?
+    }
+
+    if connection.security_level() == SecurityLevel::Insecure
+        && connection.user_uuid.get_version_num() == 4
+    {
+        // Using Error because Warning was added in the same protocol version that Secure was
+        connection.send_message(WorldHostS2CMessage::Error {
+            message: format!("You are using an old insecure version of World Host. It is highly recommended that you update to {} or later.", protocol_versions::get_version_name(protocol_versions::NEW_AUTH_PROTOCOL)),
+            critical: false,
+        }).await?;
+    }
+
+    if let Some(ip_info) = state.ip_info_map.get(remote_addr) {
+        connection.live.lock().await.country = Some(ip_info.country);
+        if let Some(external_servers) = &state.server.config.external_servers {
+            if let Some(proxy) = external_servers.iter().min_by(|a, b| {
+                f64::total_cmp(
+                    &a.lat_long.haversine_distance(&ip_info.lat_long),
+                    &b.lat_long.haversine_distance(&ip_info.lat_long),
+                )
+            }) {
+                if let Some(addr) = &proxy.addr {
+                    connection.live.lock().await.external_proxy = Some(proxy.clone());
+                    connection
+                        .send_message(WorldHostS2CMessage::ExternalProxyServer {
+                            host: addr.clone(),
+                            port: proxy.port,
+                            base_addr: proxy.base_addr.clone().unwrap_or_else(|| addr.clone()),
+                            mc_port: proxy.mc_port,
+                        })
+                        .await?;
+                }
+            }
+        }
+    }
+
+    {
+        let start = Instant::now();
+        let connections = &state.server.connections;
+        while !connections.lock().await.add(connection.clone()) {
+            {
+                let mut connections = connections.lock().await;
+                let other = connections.by_id(connection.id);
+                if let Some(other) = other {
+                    if other.addr == connection.addr {
+                        other
+                            .close_error("Connection ID taken by same IP".to_string())
+                            .await;
+                        connections.add_force(connection.clone());
+                        break;
+                    }
+                }
+            }
+            if Instant::now() - start > Duration::from_millis(500) {
+                warn!(
+                    "ID {} used twice. Disconnecting new connection.",
+                    connection.id
+                );
+                connection
+                    .close_error("That connection ID is taken.".to_string())
+                    .await;
+                return Ok(());
+            }
+            yield_now().await;
+        }
+    }
+
+    info!(
+        "There are {} open connections",
+        state.server.connections.lock().await.len()
+    );
 
     Ok(())
 }
@@ -191,15 +296,14 @@ async fn handle_connection(
 async fn create_connection(
     mut socket: SocketWrapper,
     remote_addr: IpAddr,
-    session_service: &YggdrasilMinecraftSessionService,
-    key_pair: &RsaKeyPair,
+    state: &MainServerState,
     protocol_version: u32,
 ) -> Option<Connection> {
-    let handshake_result =
-        perform_versioned_handshake(&mut socket, session_service, key_pair, protocol_version).await;
+    let handshake_result = perform_versioned_handshake(&mut socket, state, protocol_version).await;
     if let Err(error) = handshake_result {
         warn!("Failed to perform handshake from {remote_addr}: {error}");
-        socket.send_close_error_unencrypted(error.to_string()).await;
+        let message = error.to_string();
+        socket.close_error(message, None).await;
         return None;
     }
     let handshake_result = handshake_result.unwrap();
@@ -225,9 +329,7 @@ async fn create_connection(
     } else {
         let message = handshake_result.message.unwrap();
         warn!("Handshake from {remote_addr} failed: {message}");
-        socket
-            .send_close_error(message, encrypt_cipher.as_mut())
-            .await;
+        socket.close_error(message, encrypt_cipher.as_mut()).await;
         return None;
     }
 
@@ -235,9 +337,11 @@ async fn create_connection(
         id: handshake_result.connection_id,
         addr: remote_addr,
         user_uuid: handshake_result.user_id,
+        protocol_version,
         live: Arc::new(Mutex::new(LiveConnection {
             socket,
             country: None,
+            external_proxy: None,
             open: true,
             encrypt_cipher,
             decrypt_cipher: handshake_result.decrypt_cipher,
@@ -247,8 +351,7 @@ async fn create_connection(
 
 async fn perform_versioned_handshake(
     socket: &mut SocketWrapper,
-    session_service: &YggdrasilMinecraftSessionService,
-    key_pair: &RsaKeyPair,
+    state: &MainServerState,
     protocol_version: u32,
 ) -> anyhow::Result<HandshakeResult> {
     if protocol_version < protocol_versions::NEW_AUTH_PROTOCOL {
@@ -263,8 +366,7 @@ async fn perform_versioned_handshake(
     } else {
         perform_handshake(
             socket,
-            session_service,
-            key_pair,
+            state,
             protocol_version >= protocol_versions::ENCRYPTED_PROTOCOL,
         )
         .await
@@ -282,15 +384,14 @@ struct HandshakeResult {
 
 async fn perform_handshake(
     socket: &mut SocketWrapper,
-    session_service: &YggdrasilMinecraftSessionService,
-    key_pair: &RsaKeyPair,
+    state: &MainServerState,
     supports_encryption: bool,
 ) -> anyhow::Result<HandshakeResult> {
     const KEY_PREFIX: u32 = 0xFAFA0000;
     socket.0.write_u32(KEY_PREFIX).await?;
     socket.0.flush().await?;
 
-    let encoded_public_key = key_pair.public.to_public_key_der()?;
+    let encoded_public_key = state.key_pair.public.to_public_key_der()?;
     let mut challenge = vec![0; 16];
     rand::thread_rng().fill_bytes(&mut challenge);
 
@@ -309,10 +410,11 @@ async fn perform_handshake(
     let mut encrypted_secret_key = vec![0; socket.0.read_u16().await? as usize];
     socket.0.read_exact(&mut encrypted_secret_key).await?;
 
-    let secret_key = minecraft_crypt::decrypt_using_key(&key_pair.private, encrypted_secret_key)?;
+    let secret_key =
+        minecraft_crypt::decrypt_using_key(&state.key_pair.private, encrypted_secret_key)?;
     let auth_key = BigInt::from_signed_bytes_be(&minecraft_crypt::digest_data(
         "",
-        &key_pair.public,
+        &state.key_pair.public,
         &secret_key,
     )?)
     .to_str_radix(16);
@@ -337,7 +439,9 @@ async fn perform_handshake(
         }
     };
 
-    if challenge != minecraft_crypt::decrypt_using_key(&key_pair.private, encrypted_challenge)? {
+    if challenge
+        != minecraft_crypt::decrypt_using_key(&state.key_pair.private, encrypted_challenge)?
+    {
         return Ok(HandshakeResult {
             user_id: requested_uuid,
             connection_id,
@@ -349,7 +453,7 @@ async fn perform_handshake(
     }
 
     let verify_result = verify_profile(
-        session_service,
+        state.session_service.as_ref(),
         requested_uuid,
         requested_username,
         auth_key,

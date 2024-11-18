@@ -1,5 +1,5 @@
 use crate::connection::connection_id::ConnectionId;
-use crate::protocol::security_level::SecurityLevel;
+use crate::protocol::security::SecurityLevel;
 use crate::serial_fields;
 use crate::serialization::fielded::FieldedSerializer;
 use crate::serialization::serializable::PacketSerializable;

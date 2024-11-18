@@ -18,7 +18,7 @@ pub struct FullServerConfig {
     pub in_java_port: u16,
     pub ex_java_port: u16,
     pub analytics_time: Duration,
-    pub external_servers: Option<Vec<ExternalProxy>>,
+    pub external_servers: Option<Vec<Arc<ExternalProxy>>>,
 }
 
 pub struct ServerState {
