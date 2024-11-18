@@ -3,7 +3,7 @@ use crate::authlib::session_service::YggdrasilMinecraftSessionService;
 use crate::connection::connection_id::ConnectionId;
 use crate::connection::{Connection, LiveConnection};
 use crate::minecraft_crypt;
-use crate::minecraft_crypt::RsaKeyPair;
+use crate::minecraft_crypt::{Aes128Cfb, RsaKeyPair};
 use crate::protocol::data_ext::WHAsyncReadExt;
 use crate::protocol::protocol_versions;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
@@ -87,7 +87,7 @@ pub async fn run_main_server(server: Arc<ServerState>) {
             if let Some(limited) = rate_limiter.ratelimit(addr.ip()).await {
                 warn!("{} is reconnecting too quickly! {limited}", addr.ip());
                 socket
-                    .send_close_error(format!("Ratelimit exceeded! {limited}"))
+                    .send_close_error_unencrypted(format!("Ratelimit exceeded! {limited}"))
                     .await;
                 return;
             }
@@ -163,7 +163,9 @@ async fn handle_connection(
 
     if !protocol_versions::SUPPORTED.contains(&protocol_version) {
         socket
-            .send_close_error(format!("Unsupported protocol version {protocol_version}"))
+            .send_close_error_unencrypted(format!(
+                "Unsupported protocol version {protocol_version}"
+            ))
             .await;
         return Ok(());
     }
@@ -198,19 +200,23 @@ async fn create_connection(
         perform_versioned_handshake(&mut socket, session_service, key_pair, protocol_version).await;
     if let Err(error) = handshake_result {
         warn!("Failed to perform handshake from {remote_addr}: {error}");
-        socket.send_close_error(error.to_string()).await;
+        socket.send_close_error_unencrypted(error.to_string()).await;
         return None;
     }
     let handshake_result = handshake_result.unwrap();
+    let mut encrypt_cipher = handshake_result.encrypt_cipher;
 
     if handshake_result.success {
         if let Some(warning) = handshake_result.message {
             warn!("Warning in handshake from {remote_addr}: {warning}");
             if let Err(error) = socket
-                .send_message(WorldHostS2CMessage::Warning {
-                    message: warning,
-                    important: false,
-                })
+                .send_message(
+                    WorldHostS2CMessage::Warning {
+                        message: warning,
+                        important: false,
+                    },
+                    encrypt_cipher.as_mut(),
+                )
                 .await
             {
                 error!("Failed to send warning to {remote_addr}: {error}");
@@ -220,7 +226,9 @@ async fn create_connection(
     } else {
         let message = handshake_result.message.unwrap();
         warn!("Handshake from {remote_addr} failed: {message}");
-        socket.send_close_error(message).await;
+        socket
+            .send_close_error(message, encrypt_cipher.as_mut())
+            .await;
         return None;
     }
 
@@ -232,6 +240,8 @@ async fn create_connection(
             socket,
             country: None,
             open: true,
+            encrypt_cipher,
+            decrypt_cipher: handshake_result.decrypt_cipher,
         })),
     })
 }
@@ -246,6 +256,8 @@ async fn perform_versioned_handshake(
         Ok(HandshakeResult {
             user_id: socket.0.read_uuid().await?,
             connection_id: ConnectionId::new(socket.0.read_u64().await?)?,
+            encrypt_cipher: None,
+            decrypt_cipher: None,
             success: true,
             message: None,
         })
@@ -260,11 +272,11 @@ async fn perform_versioned_handshake(
     }
 }
 
-#[derive(Clone, Debug)]
 struct HandshakeResult {
     user_id: Uuid,
     connection_id: ConnectionId,
-    // TODO: Encryption
+    encrypt_cipher: Option<Aes128Cfb>,
+    decrypt_cipher: Option<Aes128Cfb>,
     success: bool,
     message: Option<String>,
 }
@@ -280,7 +292,7 @@ async fn perform_handshake(
     socket.0.flush().await?;
 
     let encoded_public_key = key_pair.public.to_public_key_der()?;
-    let mut challenge = vec![0u8; 16];
+    let mut challenge = vec![0; 16];
     rand::thread_rng().fill_bytes(&mut challenge);
 
     socket
@@ -292,10 +304,10 @@ async fn perform_handshake(
     socket.0.write_all(&challenge).await?;
     socket.0.flush().await?;
 
-    let mut encrypted_challenge = vec![0u8; socket.0.read_u16().await? as usize];
+    let mut encrypted_challenge = vec![0; socket.0.read_u16().await? as usize];
     socket.0.read_exact(&mut encrypted_challenge).await?;
 
-    let mut encrypted_secret_key = vec![0u8; socket.0.read_u16().await? as usize];
+    let mut encrypted_secret_key = vec![0; socket.0.read_u16().await? as usize];
     socket.0.read_exact(&mut encrypted_secret_key).await?;
 
     let secret_key = minecraft_crypt::decrypt_using_key(&key_pair.private, encrypted_secret_key)?;
@@ -310,11 +322,28 @@ async fn perform_handshake(
     let requested_username = socket.0.read_string().await?;
     let connection_id = ConnectionId::new(socket.0.read_u64().await?)?;
 
+    struct CipherPair {
+        encrypt: Option<Aes128Cfb>,
+        decrypt: Option<Aes128Cfb>,
+    }
+    let ciphers = if supports_encryption {
+        CipherPair {
+            encrypt: Some(minecraft_crypt::get_cipher(&secret_key)?),
+            decrypt: Some(minecraft_crypt::get_cipher(&secret_key)?),
+        }
+    } else {
+        CipherPair {
+            encrypt: None,
+            decrypt: None,
+        }
+    };
+
     if challenge != minecraft_crypt::decrypt_using_key(&key_pair.private, encrypted_challenge)? {
         return Ok(HandshakeResult {
             user_id: requested_uuid,
             connection_id,
-            // TODO: Encryption
+            encrypt_cipher: ciphers.encrypt,
+            decrypt_cipher: ciphers.decrypt,
             success: false,
             message: Some("Challenge failed".to_string()),
         });
@@ -327,14 +356,11 @@ async fn perform_handshake(
         auth_key,
     )
     .await;
-    if verify_result.is_mismatch() && verify_result.mismatch_is_error {
-        bail!(verify_result.message_with_uuid_info());
-    }
-
     Ok(HandshakeResult {
         user_id: requested_uuid,
         connection_id,
-        // TODO: Encryption,
+        encrypt_cipher: ciphers.encrypt,
+        decrypt_cipher: ciphers.decrypt,
         success: !verify_result.is_mismatch() || !verify_result.mismatch_is_error,
         message: if verify_result.is_mismatch() {
             Some(verify_result.message_with_uuid_info())

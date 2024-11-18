@@ -44,6 +44,7 @@ impl PacketSerializable for Vec<u8> {
 
 impl PacketSerializable for String {
     fn serialize_to(&self, buf: &mut Vec<u8>) {
+        (self.len() as u16).serialize_to(buf);
         buf.write_all(self.as_bytes()).unwrap()
     }
 }

@@ -10,7 +10,7 @@ pub trait WHAsyncReadExt: AsyncReadExt + Unpin {
 
 impl<T: AsyncReadExt + Unpin> WHAsyncReadExt for T {
     async fn read_string(&mut self) -> io::Result<String> {
-        let mut result = vec![0u8; self.read_u16().await? as usize];
+        let mut result = vec![0; self.read_u16().await? as usize];
         self.read_exact(&mut result).await?;
         String::from_utf8(result).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))
     }

@@ -34,10 +34,13 @@ async-compression = { version = "0.4", features = ["gzip", "tokio"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 querystring = "1.1"
 
-# Crypt
+# Cryptography
 rsa = "0.9"
 rand = "0.8"
 sha1 = "0.10"
+aes = "0.7"
+cfb8 = "0.7"
+cipher = { version = "0.3", features = ["std"] }
 
 # Funny handshake libraries
 num-bigint = "0.4"
