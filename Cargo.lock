@@ -2424,6 +2424,7 @@ dependencies = [
  "aes",
  "anyhow",
  "async-compression",
+ "byteorder",
  "case_insensitive_hashmap",
  "cfb8",
  "chrono",

@@ -8,3 +8,25 @@ pub fn copy_to_fixed_size<T: Default + Copy, const N: usize>(data: &[T]) -> [T; 
     result.copy_from_slice(data);
     result
 }
+
+// Like bail!, but for io::Result
+#[macro_export]
+macro_rules! invalid_data {
+    ($msg:literal $(,)?) => {
+        $crate::__invalid_data_impl!(format!($msg))
+    };
+    ($err:expr $(,)?) => {
+        $crate::__invalid_data_impl!(format!($err))
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        $crate::__invalid_data_impl!(format!($fmt, $($arg)*))
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __invalid_data_impl {
+    ($msg:expr) => {
+        return std::io::Result::Err(std::io::Error::new(std::io::ErrorKind::InvalidData, $msg))
+    };
+}

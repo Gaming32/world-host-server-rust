@@ -92,7 +92,7 @@ pub async fn run_main_server(server: Arc<ServerState>) {
             if let Some(limited) = rate_limiter.ratelimit(addr.ip()).await {
                 warn!("{} is reconnecting too quickly! {limited}", addr.ip());
                 let message = format!("Ratelimit exceeded! {limited}");
-                socket.close_error(message, None).await;
+                socket.close_error(message, &mut None).await;
                 return;
             }
 
@@ -170,7 +170,7 @@ async fn handle_connection(
 
     if !protocol_versions::SUPPORTED.contains(&protocol_version) {
         let message = format!("Unsupported protocol version {protocol_version}");
-        socket.close_error(message, None).await;
+        socket.close_error(message, &mut None).await;
         return Ok(());
     }
 
@@ -292,6 +292,11 @@ async fn handle_connection(
 
     // TODO: Queued friend requests
 
+    loop {
+        let message = connection.recv_message().await?;
+        info!("Received message {message:?}");
+    }
+
     Ok(())
 }
 
@@ -305,7 +310,7 @@ async fn create_connection(
     if let Err(error) = handshake_result {
         warn!("Failed to perform handshake from {remote_addr}: {error}");
         let message = error.to_string();
-        socket.close_error(message, None).await;
+        socket.close_error(message, &mut None).await;
         return None;
     }
     let handshake_result = handshake_result.unwrap();
@@ -320,7 +325,7 @@ async fn create_connection(
                         message: warning,
                         important: false,
                     },
-                    encrypt_cipher.as_mut(),
+                    &mut encrypt_cipher,
                 )
                 .await
             {
@@ -331,7 +336,7 @@ async fn create_connection(
     } else {
         let message = handshake_result.message.unwrap();
         warn!("Handshake from {remote_addr} failed: {message}");
-        socket.close_error(message, encrypt_cipher.as_mut()).await;
+        socket.close_error(message, &mut encrypt_cipher).await;
         return None;
     }
 

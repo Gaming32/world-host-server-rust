@@ -2,6 +2,7 @@ use crate::connection::connection_id::ConnectionId;
 use crate::country_code::CountryCode;
 use crate::json_data::ExternalProxy;
 use crate::minecraft_crypt::Aes128Cfb;
+use crate::protocol::c2s_message::WorldHostC2SMessage;
 use crate::protocol::protocol_versions;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::protocol::security::SecurityLevel;
@@ -41,6 +42,14 @@ impl Connection {
         )
     }
 
+    pub async fn recv_message(&self) -> io::Result<WorldHostC2SMessage> {
+        self.live
+            .lock()
+            .await
+            .recv_message(self.protocol_version)
+            .await
+    }
+
     pub async fn send_message(&self, message: WorldHostS2CMessage) -> io::Result<()> {
         if self.protocol_version >= message.first_protocol() {
             self.live.lock().await.send_message(message).await
@@ -55,15 +64,25 @@ impl Connection {
 }
 
 impl LiveConnection {
+    async fn recv_message(&mut self, protocol_version: u32) -> io::Result<WorldHostC2SMessage> {
+        self.socket
+            .recv_message(
+                &mut self.decrypt_cipher,
+                &mut self.encrypt_cipher,
+                Some(protocol_version),
+            )
+            .await
+    }
+
     async fn send_message(&mut self, message: WorldHostS2CMessage) -> io::Result<()> {
         self.socket
-            .send_message(message, self.encrypt_cipher.as_mut())
+            .send_message(message, &mut self.encrypt_cipher)
             .await
     }
 
     async fn close_error(&mut self, message: String) {
         self.socket
-            .close_error(message, self.encrypt_cipher.as_mut())
+            .close_error(message, &mut self.encrypt_cipher)
             .await
     }
 }
