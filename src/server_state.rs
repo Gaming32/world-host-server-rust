@@ -1,7 +1,9 @@
+use crate::connection::connection_id::ConnectionId;
 use crate::connection::connection_set::ConnectionSet;
 use crate::json_data::ExternalProxy;
 use crate::modules::analytics::run_analytics;
 use crate::modules::main_server::run_main_server;
+use crate::modules::proxy_server::run_proxy_server;
 use crate::SERVER_VERSION;
 use linked_hash_set::LinkedHashSet;
 use log::{info, warn};
@@ -29,6 +31,8 @@ pub struct ServerState {
 
     pub connections: Mutex<ConnectionSet>,
 
+    pub proxy_connections: Mutex<HashMap<u64, (ConnectionId, Arc<TcpStream>)>>,
+
     pub remembered_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
     pub received_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
 }
@@ -38,6 +42,7 @@ impl ServerState {
         Self {
             config,
             connections: Mutex::new(ConnectionSet::new()),
+            proxy_connections: Mutex::new(HashMap::new()),
             remembered_friend_requests: Mutex::new(HashMap::new()),
             received_friend_requests: Mutex::new(HashMap::new()),
         }
@@ -57,6 +62,13 @@ impl ServerState {
             let state = state.clone();
             tokio::spawn(async move {
                 run_analytics(state.as_ref()).await;
+            });
+        }
+
+        {
+            let state = state.clone();
+            tokio::spawn(async move {
+                run_proxy_server(state).await;
             });
         }
 

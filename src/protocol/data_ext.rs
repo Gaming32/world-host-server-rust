@@ -4,7 +4,7 @@ use std::io;
 use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
-pub trait WHAsyncReadExt: AsyncReadExt + Unpin {
+pub trait WHAsyncReadExt {
     async fn read_string(&mut self) -> io::Result<String>;
 
     async fn read_uuid(&mut self) -> io::Result<Uuid>;
@@ -22,7 +22,7 @@ impl<T: AsyncReadExt + Unpin> WHAsyncReadExt for T {
     }
 }
 
-pub trait WHReadBytesExt: ReadBytesExt {
+pub trait WHReadBytesExt {
     fn read_string(&mut self) -> io::Result<String>;
 
     fn read_uuid(&mut self) -> io::Result<Uuid>;

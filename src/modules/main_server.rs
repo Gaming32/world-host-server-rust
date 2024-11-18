@@ -65,7 +65,7 @@ pub async fn run_main_server(server: Arc<ServerState>) {
     let listener = TcpListener::bind(("0.0.0.0", server.config.port))
         .await
         .unwrap_or_else(|error| {
-            error!("Failed to bind: {error}");
+            error!("Failed to start World Host server: {error}");
             exit(1);
         });
     info!(
