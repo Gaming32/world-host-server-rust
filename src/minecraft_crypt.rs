@@ -1,9 +1,8 @@
-use crate::util::copy_to_fixed_size;
 use aes::Aes128;
 use cfb8::cipher::NewCipher;
 use cfb8::Cfb8;
 use log::error;
-use rsa::pkcs8::{EncodePrivateKey, EncodePublicKey};
+use rsa::pkcs8::EncodePublicKey;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 use sha1::Digest;
 use std::ops::Deref;

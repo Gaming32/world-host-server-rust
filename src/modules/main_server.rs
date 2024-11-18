@@ -13,7 +13,6 @@ use crate::server_state::ServerState;
 use crate::socket_wrapper::SocketWrapper;
 use crate::util::ip_info_map::IpInfoMap;
 use crate::util::java_util::java_name_uuid_from_bytes;
-use anyhow::bail;
 use log::{error, info, warn};
 use num_bigint::BigInt;
 use rand::RngCore;
