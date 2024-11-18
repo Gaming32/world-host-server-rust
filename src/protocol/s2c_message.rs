@@ -1,6 +1,5 @@
 use crate::connection::connection_id::ConnectionId;
 use crate::protocol::security::SecurityLevel;
-use crate::serial_fields;
 use crate::serialization::fielded::FieldedSerializer;
 use crate::serialization::serializable::PacketSerializable;
 use std::net::IpAddr;
@@ -177,50 +176,50 @@ impl WorldHostS2CMessage {
 
 impl FieldedSerializer for WorldHostS2CMessage {
     #[allow(deprecated)]
-    fn fields(&self) -> Vec<Box<&(dyn PacketSerializable + '_)>> {
+    fn fields(&self) -> Vec<&(dyn PacketSerializable + '_)> {
         use WorldHostS2CMessage::*;
         match self {
-            Error { message, critical } => serial_fields!(message, critical),
-            IsOnlineTo { user } => serial_fields!(user),
+            Error { message, critical } => vec![message, critical],
+            IsOnlineTo { user } => vec![user],
             OnlineGame {
                 host,
                 port,
                 owner_cid,
-            } => serial_fields!(host, port, owner_cid, &false),
+            } => vec![host, port, owner_cid, &false],
             FriendRequest {
                 from_user,
                 security,
-            } => serial_fields!(from_user, security),
+            } => vec![from_user, security],
             PublishedWorld {
                 user,
                 connection_id,
                 security,
-            } => serial_fields!(user, connection_id, security),
-            ClosedWorld { user } => serial_fields!(user),
+            } => vec![user, connection_id, security],
+            ClosedWorld { user } => vec![user],
             RequestJoin {
                 user,
                 connection_id,
                 security,
-            } => serial_fields!(user, connection_id, security),
+            } => vec![user, connection_id, security],
             QueryRequest {
                 friend,
                 connection_id,
                 security,
-            } => serial_fields!(friend, connection_id, security),
+            } => vec![friend, connection_id, security],
             QueryResponse {
                 friend,
                 length,
                 data,
-            } => serial_fields!(friend, length, data),
+            } => vec![friend, length, data],
             ProxyC2SPacket {
                 connection_id,
                 data,
-            } => serial_fields!(connection_id, data),
+            } => vec![connection_id, data],
             ProxyConnect {
                 connection_id,
                 remote_addr,
-            } => serial_fields!(connection_id, remote_addr),
-            ProxyDisconnect { connection_id } => serial_fields!(connection_id),
+            } => vec![connection_id, remote_addr],
+            ProxyDisconnect { connection_id } => vec![connection_id],
             ConnectionInfo {
                 connection_id,
                 base_ip,
@@ -228,26 +227,26 @@ impl FieldedSerializer for WorldHostS2CMessage {
                 user_ip,
                 protocol_version,
                 punch_port,
-            } => serial_fields!(
+            } => vec![
                 connection_id,
                 base_ip,
                 base_port,
                 user_ip,
                 protocol_version,
-                punch_port
-            ),
+                punch_port,
+            ],
             ExternalProxyServer {
                 host,
                 port,
                 base_addr,
                 mc_port,
-            } => serial_fields!(host, port, base_addr, mc_port),
+            } => vec![host, port, base_addr, mc_port],
             OutdatedWorldHost {
                 recommended_version,
-            } => serial_fields!(recommended_version),
-            ConnectionNotFound { connection_id } => serial_fields!(connection_id),
-            NewQueryResponse { friend, data } => serial_fields!(friend, data),
-            Warning { message, important } => serial_fields!(message, important),
+            } => vec![recommended_version],
+            ConnectionNotFound { connection_id } => vec![connection_id],
+            NewQueryResponse { friend, data } => vec![friend, data],
+            Warning { message, important } => vec![message, important],
             PunchOpenRequest {
                 punch_id,
                 purpose,
@@ -256,27 +255,27 @@ impl FieldedSerializer for WorldHostS2CMessage {
                 connection_id,
                 user,
                 security,
-            } => serial_fields!(
+            } => vec![
                 punch_id,
                 purpose,
                 from_host,
                 from_port,
                 connection_id,
                 user,
-                security
-            ),
-            CancelPortLookup { lookup_id } => serial_fields!(lookup_id),
+                security,
+            ],
+            CancelPortLookup { lookup_id } => vec![lookup_id],
             PortLookupSuccess {
                 lookup_id,
                 host,
                 port,
-            } => serial_fields!(lookup_id, host, port),
-            PunchRequestCancelled { punch_id } => serial_fields!(punch_id),
+            } => vec![lookup_id, host, port],
+            PunchRequestCancelled { punch_id } => vec![punch_id],
             PunchSuccess {
                 punch_id,
                 host,
                 port,
-            } => serial_fields!(punch_id, host, port),
+            } => vec![punch_id, host, port],
         }
     }
 }
