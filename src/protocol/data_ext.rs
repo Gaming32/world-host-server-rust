@@ -1,7 +1,6 @@
 use crate::connection::connection_id::ConnectionId;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io;
-use std::io::Read;
 use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 

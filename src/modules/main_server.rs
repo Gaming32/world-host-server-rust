@@ -296,8 +296,6 @@ async fn handle_connection(
         let message = connection.recv_message().await?;
         info!("Received message {message:?}");
     }
-
-    Ok(())
 }
 
 async fn create_connection(
