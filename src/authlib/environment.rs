@@ -5,6 +5,7 @@ pub const PROD_ENVIRONMENT: Environment = Environment {
 };
 
 #[derive(Copy, Clone, Debug)]
+#[allow(dead_code)] // Useful for Debug output
 pub struct Environment<'a> {
     pub session_host: &'a str,
     pub services_host: &'a str,

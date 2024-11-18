@@ -290,6 +290,8 @@ async fn handle_connection(
         state.server.connections.lock().await.len()
     );
 
+    // TODO: Queued friend requests
+
     Ok(())
 }
 

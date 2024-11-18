@@ -6,8 +6,6 @@ use uuid::Uuid;
 
 pub struct YggdrasilMinecraftSessionService {
     client: MinecraftClient,
-    base_url: String,
-    join_url: Url,
     check_url: Url,
 }
 
@@ -16,9 +14,7 @@ impl YggdrasilMinecraftSessionService {
         let base_url = format!("{}/session/minecraft/", env.session_host);
         Self {
             client: MinecraftClient::unauthenticated(),
-            join_url: format!("{base_url}join").parse().unwrap(),
             check_url: format!("{base_url}hasJoined").parse().unwrap(),
-            base_url,
         }
     }
 
