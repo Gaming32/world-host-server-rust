@@ -3,13 +3,16 @@ use crate::json_data::ExternalProxy;
 use crate::modules::analytics::run_analytics;
 use crate::modules::main_server::run_main_server;
 use crate::SERVER_VERSION;
+use linked_hash_set::LinkedHashSet;
 use log::{info, warn};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use try_catch::catch;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct FullServerConfig {
@@ -23,7 +26,11 @@ pub struct FullServerConfig {
 
 pub struct ServerState {
     pub config: FullServerConfig,
+
     pub connections: Mutex<ConnectionSet>,
+
+    pub remembered_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
+    pub received_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
 }
 
 impl ServerState {
@@ -31,6 +38,8 @@ impl ServerState {
         Self {
             config,
             connections: Mutex::new(ConnectionSet::new()),
+            remembered_friend_requests: Mutex::new(HashMap::new()),
+            received_friend_requests: Mutex::new(HashMap::new()),
         }
     }
 

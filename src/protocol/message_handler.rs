@@ -3,7 +3,10 @@ use crate::protocol::c2s_message::WorldHostC2SMessage;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::protocol::security::SecurityLevel;
 use crate::server_state::ServerState;
+use crate::util::{add_with_circle_limit, remove_double_key};
+use linked_hash_set::LinkedHashSet;
 use log::warn;
+use std::ops::DerefMut;
 use uuid::Uuid;
 
 pub async fn handle_message(
@@ -37,7 +40,32 @@ pub async fn handle_message(
                     }
                 }
             } else if connection.security_level() > SecurityLevel::Insecure {
-                // TODO: Queued friend requests
+                let removed_remembered = {
+                    let mut remembered = server.remembered_friend_requests.lock().await;
+                    let my_requests = remembered
+                        .entry(connection.user_uuid)
+                        .or_insert_with(LinkedHashSet::new);
+                    add_with_circle_limit(my_requests, to_user, 5)
+                };
+                let removed_received = {
+                    let mut received = server.received_friend_requests.lock().await;
+                    if let Some(removed_remembered) = removed_remembered {
+                        remove_double_key(
+                            received.deref_mut(),
+                            &removed_remembered,
+                            &connection.user_uuid,
+                        );
+                    }
+                    let my_remembered = received.entry(to_user).or_insert_with(LinkedHashSet::new);
+                    add_with_circle_limit(my_remembered, connection.user_uuid, 10)
+                };
+                if let Some(removed_received) = removed_received {
+                    remove_double_key(
+                        server.remembered_friend_requests.lock().await.deref_mut(),
+                        &removed_received,
+                        &to_user,
+                    );
+                }
             }
         }
         PublishedWorld { friends } => {

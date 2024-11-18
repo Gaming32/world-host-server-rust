@@ -14,11 +14,14 @@ use crate::server_state::ServerState;
 use crate::socket_wrapper::SocketWrapper;
 use crate::util::ip_info_map::IpInfoMap;
 use crate::util::java_util::java_name_uuid_from_bytes;
+use crate::util::remove_double_key;
 use log::{debug, error, info, warn};
 use num_bigint::BigInt;
 use rand::RngCore;
 use rsa::pkcs8::EncodePublicKey;
+use std::io;
 use std::net::IpAddr;
+use std::ops::DerefMut;
 use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
@@ -290,7 +293,7 @@ async fn handle_connection(
         state.server.connections.lock().await.len()
     );
 
-    // TODO: Queued friend requests
+    dequeue_friend_requests(&connection, &state.server).await?;
 
     loop {
         let message = connection.recv_message().await;
@@ -307,6 +310,33 @@ async fn handle_connection(
             return Err(error);
         }
     }
+}
+
+async fn dequeue_friend_requests(connection: &Connection, server: &ServerState) -> io::Result<()> {
+    let received = server
+        .received_friend_requests
+        .lock()
+        .await
+        .remove(&connection.user_uuid);
+    if received.is_none() {
+        return Ok(());
+    }
+    let received = received.unwrap();
+    let mut remembered = server.remembered_friend_requests.lock().await;
+    for received_from in received {
+        connection
+            .send_message(&WorldHostS2CMessage::FriendRequest {
+                from_user: received_from,
+                security: SecurityLevel::from(received_from, true),
+            })
+            .await?;
+        remove_double_key(
+            remembered.deref_mut(),
+            &received_from,
+            &connection.user_uuid,
+        );
+    }
+    Ok(())
 }
 
 async fn create_connection(

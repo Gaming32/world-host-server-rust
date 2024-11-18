@@ -1,3 +1,7 @@
+use linked_hash_set::LinkedHashSet;
+use std::collections::HashMap;
+use std::hash::Hash;
+
 pub mod ip_info;
 pub mod ip_info_map;
 pub mod java_util;
@@ -7,6 +11,35 @@ pub fn copy_to_fixed_size<T: Default + Copy, const N: usize>(data: &[T]) -> [T; 
     let mut result = [T::default(); N];
     result.copy_from_slice(data);
     result
+}
+
+pub fn remove_double_key<A: Hash + Eq, B: Hash + Eq>(
+    map: &mut HashMap<A, LinkedHashSet<B>>,
+    a: &A,
+    b: &B,
+) {
+    if let Some(sub) = map.get_mut(a) {
+        sub.remove(b);
+        if sub.is_empty() {
+            map.remove(a);
+        }
+    }
+}
+
+pub fn add_with_circle_limit<Q: Hash + Eq>(
+    set: &mut LinkedHashSet<Q>,
+    key: Q,
+    limit: usize,
+) -> Option<Q> {
+    if set.insert(key) {
+        if set.len() > limit {
+            set.pop_front()
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
 
 // Like bail!, but for io::Result
