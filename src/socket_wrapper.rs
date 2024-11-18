@@ -15,7 +15,7 @@ pub struct SocketWrapper(pub TcpStream);
 impl SocketWrapper {
     pub async fn send_message(
         &mut self,
-        message: WorldHostS2CMessage,
+        message: &WorldHostS2CMessage,
         encrypt_cipher: &mut Option<Aes128Cfb>,
     ) -> io::Result<()> {
         let mut buf = vec![message.type_id()];
@@ -74,7 +74,7 @@ impl SocketWrapper {
     pub async fn close_error(&mut self, message: String, encrypt_cipher: &mut Option<Aes128Cfb>) {
         if let Err(error) = self
             .send_message(
-                WorldHostS2CMessage::Error {
+                &WorldHostS2CMessage::Error {
                     message,
                     critical: true,
                 },

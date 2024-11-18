@@ -5,16 +5,16 @@ use crate::connection::{Connection, LiveConnection};
 use crate::minecraft_crypt;
 use crate::minecraft_crypt::{Aes128Cfb, RsaKeyPair};
 use crate::protocol::data_ext::WHAsyncReadExt;
-use crate::protocol::protocol_versions;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::protocol::security::SecurityLevel;
+use crate::protocol::{message_handler, protocol_versions};
 use crate::ratelimit::bucket::RateLimitBucket;
 use crate::ratelimit::limiter::RateLimiter;
 use crate::server_state::ServerState;
 use crate::socket_wrapper::SocketWrapper;
 use crate::util::ip_info_map::IpInfoMap;
 use crate::util::java_util::java_name_uuid_from_bytes;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use num_bigint::BigInt;
 use rand::RngCore;
 use rsa::pkcs8::EncodePublicKey;
@@ -193,7 +193,7 @@ async fn handle_connection(
         protocol_versions::CURRENT
     };
     connection
-        .send_message(WorldHostS2CMessage::ConnectionInfo {
+        .send_message(&WorldHostS2CMessage::ConnectionInfo {
             connection_id: connection.id,
             base_ip: state.server.config.base_addr.clone().unwrap_or_default(),
             base_port: state.server.config.ex_java_port,
@@ -211,7 +211,7 @@ async fn handle_connection(
             protocol_versions::STABLE
         );
         connection
-            .send_message(WorldHostS2CMessage::OutdatedWorldHost {
+            .send_message(&WorldHostS2CMessage::OutdatedWorldHost {
                 recommended_version: protocol_versions::get_version_name(
                     latest_visible_protocol_version,
                 )
@@ -224,7 +224,7 @@ async fn handle_connection(
         && connection.user_uuid.get_version_num() == 4
     {
         // Using Error because Warning was added in the same protocol version that Secure was
-        connection.send_message(WorldHostS2CMessage::Error {
+        connection.send_message(&WorldHostS2CMessage::Error {
             message: format!("You are using an old insecure version of World Host. It is highly recommended that you update to {} or later.", protocol_versions::get_version_name(protocol_versions::NEW_AUTH_PROTOCOL)),
             critical: false,
         }).await?;
@@ -242,7 +242,7 @@ async fn handle_connection(
                 if let Some(addr) = &proxy.addr {
                     connection.live.lock().await.external_proxy = Some(proxy.clone());
                     connection
-                        .send_message(WorldHostS2CMessage::ExternalProxyServer {
+                        .send_message(&WorldHostS2CMessage::ExternalProxyServer {
                             host: addr.clone(),
                             port: proxy.port,
                             base_addr: proxy.base_addr.clone().unwrap_or_else(|| addr.clone()),
@@ -293,8 +293,19 @@ async fn handle_connection(
     // TODO: Queued friend requests
 
     loop {
-        let message = connection.recv_message().await?;
-        info!("Received message {message:?}");
+        let message = connection.recv_message().await;
+        if message.is_err() {
+            return Ok(());
+        }
+        let message = message?;
+        debug!("Received message {message:?}");
+        if let Err(error) =
+            message_handler::handle_message(message, &connection, state.server.as_ref()).await
+        {
+            error!("A critical error occurred in client handling: {error}");
+            connection.close_error(error.to_string()).await;
+            return Err(error);
+        }
     }
 }
 
@@ -319,7 +330,7 @@ async fn create_connection(
             warn!("Warning in handshake from {remote_addr}: {warning}");
             if let Err(error) = socket
                 .send_message(
-                    WorldHostS2CMessage::Warning {
+                    &WorldHostS2CMessage::Warning {
                         message: warning,
                         important: false,
                     },

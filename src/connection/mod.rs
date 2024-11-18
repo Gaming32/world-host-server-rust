@@ -50,7 +50,7 @@ impl Connection {
             .await
     }
 
-    pub async fn send_message(&self, message: WorldHostS2CMessage) -> io::Result<()> {
+    pub async fn send_message(&self, message: &WorldHostS2CMessage) -> io::Result<()> {
         if self.protocol_version >= message.first_protocol() {
             self.live.lock().await.send_message(message).await
         } else {
@@ -74,7 +74,7 @@ impl LiveConnection {
             .await
     }
 
-    async fn send_message(&mut self, message: WorldHostS2CMessage) -> io::Result<()> {
+    async fn send_message(&mut self, message: &WorldHostS2CMessage) -> io::Result<()> {
         self.socket
             .send_message(message, &mut self.encrypt_cipher)
             .await

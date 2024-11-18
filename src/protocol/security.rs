@@ -1,7 +1,7 @@
 use crate::serialization::serializable::PacketSerializable;
 use uuid::Uuid;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SecurityLevel {
     Insecure,
     Offline,
