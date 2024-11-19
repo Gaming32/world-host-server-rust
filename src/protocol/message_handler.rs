@@ -71,7 +71,7 @@ pub async fn handle_message(
         }
         PublishedWorld { friends } => {
             connection
-                .live
+                .state
                 .lock()
                 .await
                 .open_to_friends
@@ -90,7 +90,7 @@ pub async fn handle_message(
         }
         ClosedWorld { friends } => {
             {
-                let open = &mut connection.live.lock().await.open_to_friends;
+                let open = &mut connection.state.lock().await.open_to_friends;
                 for friend in friends.iter() {
                     open.remove(friend);
                 }

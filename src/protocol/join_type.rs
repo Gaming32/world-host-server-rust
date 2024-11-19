@@ -40,7 +40,7 @@ impl JoinType {
             }),
             JoinType::Proxy => {
                 let external_proxy = if connection.protocol_version >= 3 {
-                    &connection.live.lock().await.external_proxy
+                    &connection.state.lock().await.external_proxy
                 } else {
                     &None
                 };

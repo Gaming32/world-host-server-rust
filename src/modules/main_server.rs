@@ -1,7 +1,9 @@
 use crate::authlib::auth_service::YggdrasilAuthenticationService;
 use crate::authlib::session_service::YggdrasilMinecraftSessionService;
 use crate::connection::connection_id::ConnectionId;
-use crate::connection::{Connection, LiveConnection};
+use crate::connection::{
+    Connection, ConnectionInfo, ConnectionRead, ConnectionState, ConnectionWrite,
+};
 use crate::minecraft_crypt;
 use crate::minecraft_crypt::{Aes128Cfb, RsaKeyPair};
 use crate::protocol::c2s_message::WorldHostC2SMessage;
@@ -12,7 +14,7 @@ use crate::protocol::{message_handler, protocol_versions};
 use crate::ratelimit::bucket::RateLimitBucket;
 use crate::ratelimit::limiter::RateLimiter;
 use crate::server_state::ServerState;
-use crate::socket_wrapper::SocketWrapper;
+use crate::socket_wrapper::{SocketReadWrapper, SocketWriteWrapper};
 use crate::util::ip_info_map::IpInfoMap;
 use crate::util::java_util::java_name_uuid_from_bytes;
 use crate::util::remove_double_key;
@@ -93,16 +95,19 @@ pub async fn run_main_server(server: Arc<ServerState>) {
         let rate_limiter = rate_limiter.clone();
         let state = state.clone();
         tokio::spawn(async move {
-            let mut socket = SocketWrapper(socket);
+            let (read, write) = socket.into_split();
+            let read = SocketReadWrapper(read);
+            let mut write = SocketWriteWrapper(write);
             if let Some(limited) = rate_limiter.ratelimit(addr.ip()).await {
                 warn!("{} is reconnecting too quickly! {limited}", addr.ip());
                 let message = format!("Ratelimit exceeded! {limited}");
-                socket.close_error(message, &mut None).await;
+                write.close_error(message, &mut None).await;
                 return;
             }
 
             let mut connection = None;
-            if let Err(error) = handle_connection(&state, socket, addr.ip(), &mut connection).await
+            if let Err(error) =
+                handle_connection(&state, read, write, addr.ip(), &mut connection).await
             {
                 info!("Connection {} closed due to {error}", addr);
                 if let Some(connection) = &connection {
@@ -110,13 +115,12 @@ pub async fn run_main_server(server: Arc<ServerState>) {
                 }
             }
             if let Some(connection) = connection {
-                connection.live.lock().await.open = false;
                 info!("Connection {} from {} closed", connection.id, addr);
                 state.server.connections.lock().await.remove(&connection);
                 message_handler::handle_message(
                     WorldHostC2SMessage::ClosedWorld {
                         friends: connection
-                            .live
+                            .state
                             .lock()
                             .await
                             .open_to_friends
@@ -176,11 +180,12 @@ async fn load_ip_info_map() -> IpInfoMap {
 
 async fn handle_connection(
     state: &MainServerState,
-    mut socket: SocketWrapper,
+    mut read: SocketReadWrapper,
+    mut write: SocketWriteWrapper,
     remote_addr: IpAddr,
     connection_out: &mut Option<Connection>,
 ) -> anyhow::Result<()> {
-    let protocol_version = socket.0.read_u32().await;
+    let protocol_version = read.0.read_u32().await;
     if protocol_version.is_err() {
         info!("Received a ping connection (immediate disconnect)");
         return Ok(());
@@ -189,16 +194,17 @@ async fn handle_connection(
 
     if !protocol_versions::SUPPORTED.contains(&protocol_version) {
         let message = format!("Unsupported protocol version {protocol_version}");
-        socket.close_error(message, &mut None).await;
+        write.close_error(message, &mut None).await;
         return Ok(());
     }
 
-    let connection = match create_connection(socket, remote_addr, state, protocol_version).await {
-        Some(conn) => conn,
-        None => {
-            return Ok(());
-        }
-    };
+    let connection =
+        match create_connection(read, write, remote_addr, state, protocol_version).await {
+            Some(conn) => conn,
+            None => {
+                return Ok(());
+            }
+        };
     *connection_out = Some(connection.clone());
 
     info!(
@@ -250,7 +256,7 @@ async fn handle_connection(
     }
 
     if let Some(ip_info) = state.ip_info_map.get(remote_addr) {
-        connection.live.lock().await.country = Some(ip_info.country);
+        connection.state.lock().await.country = Some(ip_info.country);
         if let Some(external_servers) = &state.server.config.external_servers {
             if let Some(proxy) = external_servers.iter().min_by(|a, b| {
                 f64::total_cmp(
@@ -259,7 +265,7 @@ async fn handle_connection(
                 )
             }) {
                 if let Some(addr) = &proxy.addr {
-                    connection.live.lock().await.external_proxy = Some(proxy.clone());
+                    connection.state.lock().await.external_proxy = Some(proxy.clone());
                     connection
                         .send_message(&WorldHostS2CMessage::ExternalProxyServer {
                             host: addr.clone(),
@@ -350,16 +356,18 @@ async fn dequeue_friend_requests(connection: &Connection, server: &ServerState) 
 }
 
 async fn create_connection(
-    mut socket: SocketWrapper,
+    mut read: SocketReadWrapper,
+    mut write: SocketWriteWrapper,
     remote_addr: IpAddr,
     state: &MainServerState,
     protocol_version: u32,
 ) -> Option<Connection> {
-    let handshake_result = perform_versioned_handshake(&mut socket, state, protocol_version).await;
+    let handshake_result =
+        perform_versioned_handshake(&mut read, &mut write, state, protocol_version).await;
     if let Err(error) = handshake_result {
         warn!("Failed to perform handshake from {remote_addr}: {error}");
         let message = error.to_string();
-        socket.close_error(message, &mut None).await;
+        write.close_error(message, &mut None).await;
         return None;
     }
     let handshake_result = handshake_result.unwrap();
@@ -368,7 +376,7 @@ async fn create_connection(
     if handshake_result.success {
         if let Some(warning) = handshake_result.message {
             warn!("Warning in handshake from {remote_addr}: {warning}");
-            if let Err(error) = socket
+            if let Err(error) = write
                 .send_message(
                     &WorldHostS2CMessage::Warning {
                         message: warning,
@@ -385,36 +393,41 @@ async fn create_connection(
     } else {
         let message = handshake_result.message.unwrap();
         warn!("Handshake from {remote_addr} failed: {message}");
-        socket.close_error(message, &mut encrypt_cipher).await;
+        write.close_error(message, &mut encrypt_cipher).await;
         return None;
     }
 
-    Some(Connection {
+    Some(Arc::new(ConnectionInfo {
         id: handshake_result.connection_id,
         addr: remote_addr,
         user_uuid: handshake_result.user_id,
         protocol_version,
-        live: Arc::new(Mutex::new(LiveConnection {
-            socket,
+        state: Mutex::new(ConnectionState {
             country: None,
             external_proxy: None,
-            open: true,
             open_to_friends: HashSet::new(),
-            encrypt_cipher,
-            decrypt_cipher: handshake_result.decrypt_cipher,
-        })),
-    })
+        }),
+        read: Mutex::new(ConnectionRead {
+            socket: read,
+            cipher: handshake_result.decrypt_cipher,
+        }),
+        write: Mutex::new(ConnectionWrite {
+            socket: write,
+            cipher: encrypt_cipher,
+        }),
+    }))
 }
 
 async fn perform_versioned_handshake(
-    socket: &mut SocketWrapper,
+    read: &mut SocketReadWrapper,
+    write: &mut SocketWriteWrapper,
     state: &MainServerState,
     protocol_version: u32,
 ) -> anyhow::Result<HandshakeResult> {
     if protocol_version < protocol_versions::NEW_AUTH_PROTOCOL {
         Ok(HandshakeResult {
-            user_id: socket.0.read_uuid().await?,
-            connection_id: ConnectionId::new(socket.0.read_u64().await?)?,
+            user_id: read.0.read_uuid().await?,
+            connection_id: ConnectionId::new(read.0.read_u64().await?)?,
             encrypt_cipher: None,
             decrypt_cipher: None,
             success: true,
@@ -422,7 +435,8 @@ async fn perform_versioned_handshake(
         })
     } else {
         perform_handshake(
-            socket,
+            read,
+            write,
             state,
             protocol_version >= protocol_versions::ENCRYPTED_PROTOCOL,
         )
@@ -440,32 +454,33 @@ struct HandshakeResult {
 }
 
 async fn perform_handshake(
-    socket: &mut SocketWrapper,
+    read: &mut SocketReadWrapper,
+    write: &mut SocketWriteWrapper,
     state: &MainServerState,
     supports_encryption: bool,
 ) -> anyhow::Result<HandshakeResult> {
     const KEY_PREFIX: u32 = 0xFAFA0000;
-    socket.0.write_u32(KEY_PREFIX).await?;
-    socket.0.flush().await?;
+    write.0.write_u32(KEY_PREFIX).await?;
+    write.0.flush().await?;
 
     let encoded_public_key = state.key_pair.public.to_public_key_der()?;
     let mut challenge = vec![0; 16];
     rand::thread_rng().fill_bytes(&mut challenge);
 
-    socket
+    write
         .0
         .write_u16(u32::from(encoded_public_key.len()) as u16)
         .await?;
-    socket.0.write_all(encoded_public_key.as_bytes()).await?;
-    socket.0.write_u16(challenge.len() as u16).await?;
-    socket.0.write_all(&challenge).await?;
-    socket.0.flush().await?;
+    write.0.write_all(encoded_public_key.as_bytes()).await?;
+    write.0.write_u16(challenge.len() as u16).await?;
+    write.0.write_all(&challenge).await?;
+    write.0.flush().await?;
 
-    let mut encrypted_challenge = vec![0; socket.0.read_u16().await? as usize];
-    socket.0.read_exact(&mut encrypted_challenge).await?;
+    let mut encrypted_challenge = vec![0; read.0.read_u16().await? as usize];
+    read.0.read_exact(&mut encrypted_challenge).await?;
 
-    let mut encrypted_secret_key = vec![0; socket.0.read_u16().await? as usize];
-    socket.0.read_exact(&mut encrypted_secret_key).await?;
+    let mut encrypted_secret_key = vec![0; read.0.read_u16().await? as usize];
+    read.0.read_exact(&mut encrypted_secret_key).await?;
 
     let secret_key =
         minecraft_crypt::decrypt_using_key(&state.key_pair.private, encrypted_secret_key)?;
@@ -476,9 +491,9 @@ async fn perform_handshake(
     )?)
     .to_str_radix(16);
 
-    let requested_uuid = socket.0.read_uuid().await?;
-    let requested_username = socket.0.read_string().await?;
-    let connection_id = ConnectionId::new(socket.0.read_u64().await?)?;
+    let requested_uuid = read.0.read_uuid().await?;
+    let requested_username = read.0.read_string().await?;
+    let connection_id = ConnectionId::new(read.0.read_u64().await?)?;
 
     struct CipherPair {
         encrypt: Option<Aes128Cfb>,

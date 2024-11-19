@@ -21,6 +21,6 @@ appenders:
         pattern: logs/older-{}.log.gz
 
 root:
-  level: debug
+  level: info
   appenders:
     - stdout

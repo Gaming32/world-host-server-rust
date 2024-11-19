@@ -34,10 +34,8 @@ pub async fn run_analytics(server: &ServerState) {
         let mut total = 0;
         let mut by_country = HashMap::new();
         {
-            let connections = server.connections.lock().await;
-            for connection in connections.iter() {
-                let live = connection.live.lock().await;
-                if let Some(country) = live.country {
+            for connection in server.connections.lock().await.iter() {
+                if let Some(country) = connection.state.lock().await.country {
                     by_country
                         .entry(country)
                         .and_modify(|count| *count += 1)

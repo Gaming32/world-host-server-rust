@@ -7,31 +7,17 @@ use cfb8::cipher::AsyncStreamCipher;
 use log::warn;
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 
-#[derive(Debug)]
-pub struct SocketWrapper(pub TcpStream);
+pub struct SocketReadWrapper(pub OwnedReadHalf);
 
-impl SocketWrapper {
-    pub async fn send_message(
-        &mut self,
-        message: &WorldHostS2CMessage,
-        encrypt_cipher: &mut Option<Aes128Cfb>,
-    ) -> io::Result<()> {
-        let mut buf = vec![message.type_id()];
-        message.serialize_to(&mut buf);
-        buf.splice(0..0, (buf.len() as u32).to_be_bytes());
-        if let Some(cipher) = encrypt_cipher {
-            cipher.encrypt(&mut buf);
-        }
-        self.0.write_all(&buf).await?;
-        self.0.flush().await
-    }
+pub struct SocketWriteWrapper(pub OwnedWriteHalf);
 
+impl SocketReadWrapper {
     pub async fn recv_message(
         &mut self,
         decrypt_cipher: &mut Option<Aes128Cfb>,
-        encrypt_cipher: &mut Option<Aes128Cfb>,
         max_protocol_version: Option<u32>,
     ) -> io::Result<WorldHostC2SMessage> {
         let size = {
@@ -44,8 +30,6 @@ impl SocketWrapper {
         };
 
         if size == 0 {
-            self.close_error("Message is empty".to_string(), encrypt_cipher)
-                .await;
             invalid_data!("Message is empty");
         }
 
@@ -69,6 +53,23 @@ impl SocketWrapper {
         }
 
         WorldHostC2SMessage::parse(data[0], &data[1..], max_protocol_version)
+    }
+}
+
+impl SocketWriteWrapper {
+    pub async fn send_message(
+        &mut self,
+        message: &WorldHostS2CMessage,
+        encrypt_cipher: &mut Option<Aes128Cfb>,
+    ) -> io::Result<()> {
+        let mut buf = vec![message.type_id()];
+        message.serialize_to(&mut buf);
+        buf.splice(0..0, (buf.len() as u32).to_be_bytes());
+        if let Some(cipher) = encrypt_cipher {
+            cipher.encrypt(&mut buf);
+        }
+        self.0.write_all(&buf).await?;
+        self.0.flush().await
     }
 
     pub async fn close_error(&mut self, message: String, encrypt_cipher: &mut Option<Aes128Cfb>) {
