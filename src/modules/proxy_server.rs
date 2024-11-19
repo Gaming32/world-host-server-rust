@@ -4,7 +4,6 @@ use crate::json_data::ExternalProxy;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::server_state::{FullServerConfig, ServerState};
 use crate::util::mc_packet::{MinecraftPacketAsyncRead, MinecraftPacketWrite};
-use byteorder::{BigEndian, WriteBytesExt};
 use log::{error, info};
 use std::net::IpAddr;
 use std::process::exit;
@@ -14,7 +13,6 @@ use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
-use tokio::task::yield_now;
 use tokio::time::{sleep, Instant};
 
 pub async fn run_proxy_server(server: Arc<ServerState>) {
