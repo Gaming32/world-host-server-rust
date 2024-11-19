@@ -3,12 +3,13 @@ use chrono::Local;
 use log::{error, info};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{interval_at, Instant, MissedTickBehavior};
 use try_catch::catch;
 
-pub async fn run_analytics(server: &ServerState) {
+pub async fn run_analytics(server: Arc<ServerState>) {
     let analytics_time = server.config.analytics_time;
     if analytics_time.is_zero() {
         return info!("Analytics disabled by request");

@@ -1,13 +1,16 @@
 use crate::connection::Connection;
 use crate::protocol::c2s_message::WorldHostC2SMessage;
+use crate::protocol::port_lookup::{ActivePortLookup, PORT_LOOKUP_EXPIRY};
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::protocol::security::SecurityLevel;
 use crate::server_state::ServerState;
 use crate::util::{add_with_circle_limit, remove_double_key};
 use linked_hash_set::LinkedHashSet;
 use log::warn;
+use queues::IsQueue;
 use std::ops::DerefMut;
 use tokio::io::AsyncWriteExt;
+use tokio::time::Instant;
 use uuid::Uuid;
 
 pub async fn handle_message(
@@ -311,7 +314,17 @@ pub async fn handle_message(
             }
         }
         BeginPortLookup { lookup_id } => {
-            // TODO: Port lookups
+            let request = ActivePortLookup {
+                lookup_id,
+                source_client: connection.id,
+            };
+            server.port_lookups.lock().await.insert(lookup_id, request);
+            server
+                .port_lookup_by_expiry
+                .lock()
+                .await
+                .add((Instant::now() + PORT_LOOKUP_EXPIRY, request))
+                .unwrap();
         }
         PunchSuccess {
             connection_id,

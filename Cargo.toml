@@ -52,3 +52,4 @@ uuid = { version = "1.11", features = ["serde"] }
 socket2 = "0.5"
 byteorder = "1.5"
 linked_hash_set = "0.1"
+queues = "1.1"

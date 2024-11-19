@@ -4,9 +4,12 @@ use crate::json_data::ExternalProxy;
 use crate::modules::analytics::run_analytics;
 use crate::modules::main_server::run_main_server;
 use crate::modules::proxy_server::run_proxy_server;
+use crate::modules::signalling_server::run_signalling_server;
+use crate::protocol::port_lookup::ActivePortLookup;
 use crate::SERVER_VERSION;
 use linked_hash_set::LinkedHashSet;
 use log::{info, warn};
+use queues::Queue;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,6 +17,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
+use tokio::time::Instant;
 use try_catch::catch;
 use uuid::Uuid;
 
@@ -36,16 +40,25 @@ pub struct ServerState {
 
     pub remembered_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
     pub received_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
+
+    pub port_lookups: Mutex<HashMap<Uuid, ActivePortLookup>>,
+    pub port_lookup_by_expiry: Mutex<Queue<(Instant, ActivePortLookup)>>,
 }
 
 impl ServerState {
     pub fn new(config: FullServerConfig) -> Self {
         Self {
             config,
+
             connections: Mutex::new(ConnectionSet::new()),
+
             proxy_connections: Mutex::new(HashMap::new()),
+
             remembered_friend_requests: Mutex::new(HashMap::new()),
             received_friend_requests: Mutex::new(HashMap::new()),
+
+            port_lookups: Mutex::new(HashMap::new()),
+            port_lookup_by_expiry: Mutex::new(Queue::new()),
         }
     }
 
@@ -59,20 +72,18 @@ impl ServerState {
 
         let state = Arc::new(self);
 
-        {
-            let state = state.clone();
-            tokio::spawn(async move {
-                run_analytics(state.as_ref()).await;
-            });
+        macro_rules! run_sub_server {
+            ($function:ident) => {{
+                let state = state.clone();
+                tokio::spawn(async move {
+                    $function(state).await;
+                });
+            }};
         }
 
-        {
-            let state = state.clone();
-            tokio::spawn(async move {
-                run_proxy_server(state).await;
-            });
-        }
-
+        run_sub_server!(run_analytics);
+        run_sub_server!(run_proxy_server);
+        run_sub_server!(run_signalling_server);
         run_main_server(state).await;
     }
 
