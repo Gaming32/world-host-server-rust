@@ -17,7 +17,7 @@ impl CountryCode {
     }
 
     fn validate(c: char) -> anyhow::Result<u8> {
-        if c.is_ascii_lowercase() {
+        if c.is_ascii_uppercase() {
             Ok(c as u8)
         } else {
             bail!("Invalid ISO alpha-2 character: {c}")

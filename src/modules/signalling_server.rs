@@ -78,7 +78,15 @@ async fn cleanup_expired_punch_requests(server: &ServerState) {
     while let Ok((expiry, request)) = lookups.peek() {
         if time > expiry {
             lookups.remove().unwrap();
-            server.port_lookups.lock().await.remove(&request.lookup_id);
+            if server
+                .port_lookups
+                .lock()
+                .await
+                .remove(&request.lookup_id)
+                .is_none()
+            {
+                continue;
+            }
             if let Some(connection) = server.connections.lock().await.by_id(request.source_client) {
                 let _ = connection
                     .send_message(&WorldHostS2CMessage::CancelPortLookup {
