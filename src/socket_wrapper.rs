@@ -7,8 +7,7 @@ use cfb8::cipher::AsyncStreamCipher;
 use log::warn;
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf, ReadHalf, WriteHalf};
-use tokio::net::TcpStream;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 pub struct SocketReadWrapper(pub OwnedReadHalf);
 

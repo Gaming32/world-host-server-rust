@@ -4,7 +4,7 @@ use crate::json_data::ExternalProxy;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::server_state::{FullServerConfig, ServerState};
 use crate::util::mc_packet::{MinecraftPacketAsyncRead, MinecraftPacketRead, MinecraftPacketWrite};
-use log::{debug, error, info};
+use log::{error, info};
 use std::io::Cursor;
 use std::net::IpAddr;
 use std::process::exit;
