@@ -48,7 +48,7 @@ impl<T: AsyncReadExt + Unpin> MinecraftPacketAsyncRead for T {
 pub trait MinecraftPacketWrite {
     fn write_var_int(&mut self, value: i32) -> io::Result<()>;
 
-    fn write_string(&mut self, value: String, max_length: usize) -> io::Result<()>;
+    fn write_mc_string(&mut self, value: String, max_length: usize) -> io::Result<()>;
 }
 
 impl MinecraftPacketWrite for Vec<u8> {
@@ -66,7 +66,7 @@ impl MinecraftPacketWrite for Vec<u8> {
         Ok(())
     }
 
-    fn write_string(&mut self, value: String, max_length: usize) -> io::Result<()> {
+    fn write_mc_string(&mut self, value: String, max_length: usize) -> io::Result<()> {
         if value.len() > max_length {
             invalid_data!("String exceeds max_length ({max_length} bytes)");
         }

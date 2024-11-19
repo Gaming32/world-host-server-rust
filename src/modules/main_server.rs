@@ -290,7 +290,7 @@ async fn handle_connection(
                     }
                 }
             }
-            if Instant::now() - start > Duration::from_millis(500) {
+            if start.elapsed() > Duration::from_millis(500) {
                 warn!(
                     "ID {} used twice. Disconnecting new connection.",
                     connection.id

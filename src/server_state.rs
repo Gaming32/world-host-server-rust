@@ -31,7 +31,7 @@ pub struct ServerState {
 
     pub connections: Mutex<ConnectionSet>,
 
-    pub proxy_connections: Mutex<HashMap<u64, (ConnectionId, Arc<TcpStream>)>>,
+    pub proxy_connections: Mutex<HashMap<u64, (ConnectionId, Arc<Mutex<TcpStream>>)>>,
 
     pub remembered_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
     pub received_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,

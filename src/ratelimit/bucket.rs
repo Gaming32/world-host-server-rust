@@ -63,6 +63,6 @@ impl<K: Eq + Hash + Copy> RateLimitBucket<K> {
         self.entries
             .lock()
             .unwrap()
-            .retain(|_, entry| Instant::now() - entry.time < self.expiry)
+            .retain(|_, entry| entry.time.elapsed() < self.expiry)
     }
 }

@@ -7,6 +7,7 @@ use crate::util::{add_with_circle_limit, remove_double_key};
 use linked_hash_set::LinkedHashSet;
 use log::warn;
 use std::ops::DerefMut;
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 pub async fn handle_message(
@@ -186,10 +187,22 @@ pub async fn handle_message(
             connection_id,
             data,
         } => {
-            // TODO: Proxy
+            if let Some((cid, socket)) = server.proxy_connections.lock().await.get(&connection_id) {
+                if *cid == connection.id {
+                    let mut socket = socket.lock().await;
+                    // Socket may be disconnected. Let the receiver deal with that.
+                    let _ = socket.write_all(&data).await;
+                    let _ = socket.flush().await;
+                }
+            }
         }
         ProxyDisconnect { connection_id } => {
-            // TODO: Proxy
+            if let Some((cid, socket)) = server.proxy_connections.lock().await.get(&connection_id) {
+                if *cid == connection.id {
+                    // Socket may already be shutdown. That's the receiver's job to handle.
+                    let _ = socket.lock().await.shutdown().await;
+                }
+            }
         }
         RequestDirectJoin { connection_id } => {
             if connection_id != connection.id {

@@ -4,12 +4,18 @@ use crate::json_data::ExternalProxy;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::server_state::{FullServerConfig, ServerState};
 use crate::util::mc_packet::{MinecraftPacketAsyncRead, MinecraftPacketWrite};
+use byteorder::{BigEndian, WriteBytesExt};
 use log::{error, info};
+use std::net::IpAddr;
 use std::process::exit;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex;
+use tokio::task::yield_now;
+use tokio::time::{sleep, Instant};
 
 pub async fn run_proxy_server(server: Arc<ServerState>) {
     if server.config.base_addr.is_none() {
@@ -47,7 +53,7 @@ pub async fn run_proxy_server(server: Arc<ServerState>) {
 
         let server = server.clone();
         tokio::spawn(async move {
-            handle_proxy_connection(proxy_socket, connection_id, server.as_ref()).await;
+            handle_proxy_connection(proxy_socket, addr.ip(), connection_id, server.as_ref()).await;
         });
     }
 }
@@ -60,10 +66,17 @@ fn check_for_fallback_message(servers: &[Arc<ExternalProxy>]) {
     info!("that it will be used only as a fallback if the client's best choice for external proxy goes down.");
 }
 
-async fn handle_proxy_connection(mut socket: TcpStream, connection_id: u64, server: &ServerState) {
+async fn handle_proxy_connection(
+    socket: TcpStream,
+    remote_addr: IpAddr,
+    connection_id: u64,
+    server: &ServerState,
+) {
     let mut connection = None;
     // Any error returned simply means the connection was closed, and we don't care.
-    if let Err(error) = handle_inner(&mut socket, connection_id, server, &mut connection).await {
+    if let Err(error) =
+        handle_inner(socket, remote_addr, connection_id, server, &mut connection).await
+    {
         info!("Closing proxy connection {connection_id} due to {error}");
     }
     server.proxy_connections.lock().await.remove(&connection_id);
@@ -77,25 +90,118 @@ async fn handle_proxy_connection(mut socket: TcpStream, connection_id: u64, serv
 }
 
 async fn handle_inner(
-    socket: &mut TcpStream,
+    mut socket: TcpStream,
+    remote_addr: IpAddr,
     connection_id: u64,
     server: &ServerState,
     connection_out: &mut Option<Connection>,
 ) -> io::Result<()> {
-    let dest_cid = handshake(socket, &server.config).await?;
+    let dest_cid = handshake(&mut socket, &server.config).await?;
     if dest_cid.is_none() {
         return Ok(());
     }
-    let dest_cid = dest_cid.unwrap();
+    let HandshakeResult {
+        connection_id: dest_cid,
+        next_state,
+        handshake_data,
+    } = dest_cid.unwrap();
+
+    let mut connection = {
+        let connections = server.connections.lock().await;
+        let connection = connections.by_id(dest_cid);
+        if connection.is_none() {
+            return disconnect(
+                &mut socket,
+                next_state,
+                format!("Couldn't find server with ID {dest_cid}"),
+            )
+            .await;
+        }
+        connection.unwrap().clone()
+    };
+    *connection_out = Some(connection.clone());
+
+    let socket = Arc::new(Mutex::new(socket));
+    server
+        .proxy_connections
+        .lock()
+        .await
+        .insert(connection_id, (dest_cid, socket.clone()));
+
+    connection
+        .send_message(&WorldHostS2CMessage::ProxyConnect {
+            connection_id,
+            remote_addr,
+        })
+        .await?;
+    connection
+        .send_message(&WorldHostS2CMessage::ProxyC2SPacket {
+            connection_id,
+            data: {
+                let mut data = Vec::with_capacity(handshake_data.len() + 2);
+                data.write_var_int(handshake_data.len() as i32)?;
+                data.extend_from_slice(&handshake_data);
+                drop(handshake_data);
+                data
+            },
+        })
+        .await?;
+
+    let mut buffer = vec![0; 64 * 1024];
+    loop {
+        let read = socket.lock().await.read(&mut buffer).await?;
+        if read == 0 {
+            continue;
+        }
+        let send_start = Instant::now();
+        let failed = loop {
+            let result = connection
+                .send_message(&WorldHostS2CMessage::ProxyC2SPacket {
+                    connection_id,
+                    data: buffer[..read].to_vec(),
+                })
+                .await;
+            if result.is_ok() {
+                break false;
+            }
+            drop(result);
+            let failed = loop {
+                sleep(Duration::from_millis(50)).await;
+                if let Some(new_connection) =
+                    server.connections.lock().await.by_id(dest_cid).cloned()
+                {
+                    *connection_out = Some(new_connection.clone());
+                    connection = new_connection;
+                    break false;
+                }
+                if send_start.elapsed() > Duration::from_secs(5) {
+                    break true;
+                }
+            };
+            if failed {
+                break true;
+            }
+        };
+        if failed {
+            break;
+        }
+    }
 
     Ok(())
+}
+
+struct HandshakeResult {
+    connection_id: ConnectionId,
+    next_state: u8,
+    handshake_data: Vec<u8>,
 }
 
 async fn handshake(
     socket: &mut TcpStream,
     config: &FullServerConfig,
-) -> io::Result<Option<ConnectionId>> {
-    socket.read_var_int().await?; // Packet size
+) -> io::Result<Option<HandshakeResult>> {
+    let packet_size = socket.read_var_int().await? as usize;
+    let handshake_data = vec![0; packet_size];
     socket.read_var_int().await?; // Packet ID
     socket.read_var_int().await?; // Protocol version
     let this_addr = socket.read_mc_string(255).await?;
@@ -104,7 +210,11 @@ async fn handshake(
 
     let cid_str = &this_addr[..this_addr.find('.').unwrap_or(this_addr.len())];
     Ok(match cid_str.parse() {
-        Ok(cid) => Some(cid),
+        Ok(connection_id) => Some(HandshakeResult {
+            connection_id,
+            next_state,
+            handshake_data,
+        }),
         Err(error) => {
             disconnect(
                 socket,
@@ -131,9 +241,9 @@ async fn disconnect(socket: &mut TcpStream, next_state: u8, message: String) -> 
 
     let mut packet_data = vec![0x00];
     if next_state == 1 {
-        packet_data.write_string(format!(r#"{{"description":{json_message}}}"#), 32767)?;
+        packet_data.write_mc_string(format!(r#"{{"description":{json_message}}}"#), 32767)?;
     } else if next_state == 2 {
-        packet_data.write_string(json_message, 262144)?;
+        packet_data.write_mc_string(json_message, 262144)?;
     }
     let mut packet = Vec::new();
     packet.write_var_int(packet_data.len() as i32)?;
