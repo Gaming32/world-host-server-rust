@@ -23,6 +23,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::process::exit;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::{fs, io};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -68,7 +69,16 @@ fn main() {
         });
     }
 
-    tokio::runtime::Runtime::new().unwrap().block_on(async {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_name_fn(|| {
+            static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+            let id = ATOMIC_ID.fetch_add(1, Ordering::SeqCst);
+            format!("tokio-worker-{id}")
+        })
+        .build()
+        .unwrap();
+    rt.block_on(async move {
         ServerState::new(FullServerConfig {
             port: args.port,
             base_addr,
