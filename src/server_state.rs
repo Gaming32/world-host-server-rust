@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
+use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use try_catch::catch;
@@ -31,7 +32,7 @@ pub struct ServerState {
 
     pub connections: Mutex<ConnectionSet>,
 
-    pub proxy_connections: Mutex<HashMap<u64, (ConnectionId, Arc<Mutex<TcpStream>>)>>,
+    pub proxy_connections: Mutex<HashMap<u64, (ConnectionId, Mutex<OwnedWriteHalf>)>>,
 
     pub remembered_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
     pub received_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,

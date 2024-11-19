@@ -1,14 +1,14 @@
 use crate::invalid_data;
 use std::io;
+use std::io::{Cursor, Read};
 use tokio::io::AsyncReadExt;
+use tokio_util::bytes::Buf;
 
 const VARINT_SEGMENT_BITS: i32 = 0x7f;
 const VARINT_CONTINUE_BIT: i32 = 0x80;
 
 pub trait MinecraftPacketAsyncRead {
     async fn read_var_int(&mut self) -> io::Result<i32>;
-
-    async fn read_mc_string(&mut self, max_length: usize) -> io::Result<String>;
 }
 
 impl<T: AsyncReadExt + Unpin> MinecraftPacketAsyncRead for T {
@@ -33,14 +33,44 @@ impl<T: AsyncReadExt + Unpin> MinecraftPacketAsyncRead for T {
 
         Ok(value)
     }
+}
 
-    async fn read_mc_string(&mut self, max_length: usize) -> io::Result<String> {
-        let length = self.read_var_int().await? as usize;
+pub trait MinecraftPacketRead {
+    fn get_var_int(&mut self) -> io::Result<i32>;
+
+    fn get_mc_string(&mut self, max_length: usize) -> io::Result<String>;
+}
+
+impl MinecraftPacketRead for Cursor<&[u8]> {
+    fn get_var_int(&mut self) -> io::Result<i32> {
+        let mut value = 0;
+        let mut position = 0;
+
+        loop {
+            let current = self.get_u8() as i32;
+            value |= (current & VARINT_SEGMENT_BITS) << position;
+
+            if (current & VARINT_CONTINUE_BIT) == 0 {
+                break;
+            }
+
+            position += 7;
+
+            if position >= 32 {
+                invalid_data!("VarInt is too big");
+            }
+        }
+
+        Ok(value)
+    }
+
+    fn get_mc_string(&mut self, max_length: usize) -> io::Result<String> {
+        let length = self.get_var_int()? as usize;
         if length > max_length {
             invalid_data!("String exceeds max_length ({max_length} bytes)");
         }
         let mut result = vec![0; length];
-        self.read_exact(&mut result).await?;
+        Read::read_exact(self, &mut result)?;
         String::from_utf8(result).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }

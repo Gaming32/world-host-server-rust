@@ -3,8 +3,9 @@ use crate::connection::Connection;
 use crate::json_data::ExternalProxy;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::server_state::{FullServerConfig, ServerState};
-use crate::util::mc_packet::{MinecraftPacketAsyncRead, MinecraftPacketWrite};
-use log::{error, info};
+use crate::util::mc_packet::{MinecraftPacketAsyncRead, MinecraftPacketRead, MinecraftPacketWrite};
+use log::{debug, error, info};
+use std::io::Cursor;
 use std::net::IpAddr;
 use std::process::exit;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Instant};
+use tokio_util::bytes::Buf;
 
 pub async fn run_proxy_server(server: Arc<ServerState>) {
     if server.config.base_addr.is_none() {
@@ -94,15 +96,15 @@ async fn handle_inner(
     server: &ServerState,
     connection_out: &mut Option<Connection>,
 ) -> io::Result<()> {
-    let dest_cid = handshake(&mut socket, &server.config).await?;
-    if dest_cid.is_none() {
+    let handshake_result = handshake(&mut socket, &server.config).await?;
+    if handshake_result.is_none() {
         return Ok(());
     }
     let HandshakeResult {
         connection_id: dest_cid,
         next_state,
         handshake_data,
-    } = dest_cid.unwrap();
+    } = handshake_result.unwrap();
 
     let mut connection = {
         let connections = server.connections.lock().await;
@@ -119,12 +121,12 @@ async fn handle_inner(
     };
     *connection_out = Some(connection.clone());
 
-    let socket = Arc::new(Mutex::new(socket));
+    let (mut read, write) = socket.into_split();
     server
         .proxy_connections
         .lock()
         .await
-        .insert(connection_id, (dest_cid, socket.clone()));
+        .insert(connection_id, (dest_cid, Mutex::new(write)));
 
     connection
         .send_message(&WorldHostS2CMessage::ProxyConnect {
@@ -147,16 +149,16 @@ async fn handle_inner(
 
     let mut buffer = vec![0; 64 * 1024];
     loop {
-        let read = socket.lock().await.read(&mut buffer).await?;
-        if read == 0 {
-            continue;
+        let n = read.read(&mut buffer).await?;
+        if n == 0 {
+            break;
         }
         let send_start = Instant::now();
         let failed = loop {
             let result = connection
                 .send_message(&WorldHostS2CMessage::ProxyC2SPacket {
                     connection_id,
-                    data: buffer[..read].to_vec(),
+                    data: buffer[..n].to_vec(),
                 })
                 .await;
             if result.is_ok() {
@@ -199,12 +201,15 @@ async fn handshake(
     config: &FullServerConfig,
 ) -> io::Result<Option<HandshakeResult>> {
     let packet_size = socket.read_var_int().await? as usize;
-    let handshake_data = vec![0; packet_size];
-    socket.read_var_int().await?; // Packet ID
-    socket.read_var_int().await?; // Protocol version
-    let this_addr = socket.read_mc_string(255).await?;
-    let this_port = socket.read_u16().await?;
-    let next_state = socket.read_var_int().await? as u8;
+    let mut handshake_data = vec![0; packet_size];
+    socket.read_exact(&mut handshake_data).await?;
+
+    let mut handshake_cursor = Cursor::new(handshake_data.as_slice());
+    handshake_cursor.get_var_int()?; // Packet ID
+    handshake_cursor.get_var_int()?; // Protocol version
+    let this_addr = handshake_cursor.get_mc_string(255)?;
+    let this_port = handshake_cursor.get_u16();
+    let next_state = handshake_cursor.get_var_int()? as u8;
 
     let cid_str = &this_addr[..this_addr.find('.').unwrap_or(this_addr.len())];
     Ok(match cid_str.parse() {

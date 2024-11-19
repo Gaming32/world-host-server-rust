@@ -14,7 +14,7 @@ pub const CLOSED_WORLD_ID: u8 = 5;
 pub const REQUEST_JOIN_ID: u8 = 6;
 pub const QUERY_REQUEST_ID: u8 = 7;
 pub const QUERY_RESPONSE_ID: u8 = 8;
-pub const PROXY_C2_SPACKET_ID: u8 = 9;
+pub const PROXY_C2S_PACKET_ID: u8 = 9;
 pub const PROXY_CONNECT_ID: u8 = 10;
 pub const PROXY_DISCONNECT_ID: u8 = 11;
 pub const CONNECTION_INFO_ID: u8 = 12;
@@ -151,7 +151,7 @@ impl WorldHostS2CMessage {
             RequestJoin { .. } => REQUEST_JOIN_ID,
             QueryRequest { .. } => QUERY_REQUEST_ID,
             QueryResponse { .. } => QUERY_RESPONSE_ID,
-            ProxyC2SPacket { .. } => PROXY_C2_SPACKET_ID,
+            ProxyC2SPacket { .. } => PROXY_C2S_PACKET_ID,
             ProxyConnect { .. } => PROXY_CONNECT_ID,
             ProxyDisconnect { .. } => PROXY_DISCONNECT_ID,
             ConnectionInfo { .. } => CONNECTION_INFO_ID,
