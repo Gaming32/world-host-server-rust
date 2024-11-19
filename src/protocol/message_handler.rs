@@ -264,8 +264,8 @@ pub async fn handle_message(
             punch_id,
             my_host,
             my_port,
-            my_local_host,
-            my_local_port,
+            my_local_host: _,
+            my_local_port: _,
         } => {
             if let Some(target_client) = server.connections.lock().await.by_id(target_connection) {
                 if target_client.protocol_version < 7 {

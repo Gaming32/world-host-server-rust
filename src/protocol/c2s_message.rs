@@ -73,7 +73,9 @@ pub enum WorldHostC2SMessage {
         punch_id: Uuid,
         my_host: String,
         my_port: u16,
+        #[allow(dead_code)]
         my_local_host: String,
+        #[allow(dead_code)]
         my_local_port: u16,
     },
     PunchFailed {
