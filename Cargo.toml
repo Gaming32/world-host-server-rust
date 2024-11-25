@@ -38,7 +38,7 @@ querystring = "1.1"
 rsa = "0.9"
 rand = "0.8"
 sha1 = "0.10"
-aes = "0.7"
+aes = "0.8"
 cfb8 = "0.7"
 cipher = { version = "0.3", features = ["std"] }
 
