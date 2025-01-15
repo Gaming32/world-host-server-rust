@@ -117,17 +117,17 @@ pub async fn run_main_server(server: Arc<ServerState>) {
             if let Some(connection) = connection {
                 info!("Connection {} from {} closed", connection.id, addr);
                 state.server.connections.lock().await.remove(&connection);
+                // Inlining this variable will cause the lock to not be dropped, causing a deadlock in handle_message
+                let friends: Vec<Uuid> = connection
+                    .state
+                    .lock()
+                    .await
+                    .open_to_friends
+                    .iter()
+                    .copied()
+                    .collect();
                 message_handler::handle_message(
-                    WorldHostC2SMessage::ClosedWorld {
-                        friends: connection
-                            .state
-                            .lock()
-                            .await
-                            .open_to_friends
-                            .iter()
-                            .copied()
-                            .collect(),
-                    },
+                    WorldHostC2SMessage::ClosedWorld { friends },
                     &connection,
                     &state.server,
                 )

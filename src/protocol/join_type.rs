@@ -40,9 +40,9 @@ impl JoinType {
             }),
             JoinType::Proxy => {
                 let external_proxy = if connection.protocol_version >= 3 {
-                    &connection.state.lock().await.external_proxy
+                    connection.state.lock().await.external_proxy.clone()
                 } else {
-                    &None
+                    None
                 };
 
                 let base_addr = external_proxy
@@ -51,7 +51,6 @@ impl JoinType {
                     .or_else(|| config.base_addr.clone())?;
 
                 let port = external_proxy
-                    .clone()
                     .map(|p| p.mc_port)
                     .unwrap_or_else(|| config.ex_java_port);
 
