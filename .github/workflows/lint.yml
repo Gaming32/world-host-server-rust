@@ -1,11 +1,11 @@
-name: Require Format
+name: Rust Lint
 on: [push, pull_request]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  rustfmt:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,3 +13,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Check rustfmt
         run: cargo fmt --check
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
