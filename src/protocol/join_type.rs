@@ -48,6 +48,7 @@ impl JoinType {
                 let base_addr = external_proxy
                     .clone()
                     .and_then(|p| p.base_addr.clone())
+                    .or_else(|| external_proxy.clone().and_then(|p| p.addr.clone()))
                     .or_else(|| config.base_addr.clone())?;
 
                 let port = external_proxy
