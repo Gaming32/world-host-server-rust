@@ -1,6 +1,7 @@
 use crate::country_code::CountryCode;
 use crate::lat_long::LatitudeLongitude;
 
+#[derive(Debug)]
 pub struct IpInfo {
     pub country: CountryCode,
     pub lat_long: LatitudeLongitude,
