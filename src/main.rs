@@ -26,8 +26,6 @@ use std::process::exit;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::{fs, io};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
 use tokio::time::sleep;
 
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
