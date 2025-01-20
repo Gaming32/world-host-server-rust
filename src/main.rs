@@ -115,22 +115,3 @@ fn read_external_servers() -> io::Result<Option<Vec<ExternalProxy>>> {
     let reader = BufReader::new(file);
     Ok(serde_json::from_reader(reader)?)
 }
-
-#[allow(dead_code)]
-async fn old_main() {
-    let listener = TcpListener::bind("0.0.0.0:1234").await.unwrap();
-
-    loop {
-        let (socket, _) = listener.accept().await.unwrap();
-        println!("Received connection from {:?}", socket.peer_addr());
-        tokio::spawn(async move {
-            process(socket).await;
-        });
-    }
-}
-
-async fn process(mut socket: TcpStream) {
-    while let Ok(byte) = socket.read_i8().await {
-        socket.write_i8(byte).await.unwrap();
-    }
-}
