@@ -47,7 +47,7 @@ num-bigint = "0.4"
 md-5 = "0.10"
 
 # Application
-tokio = { version = "1.43", features = ["full"] }
+tokio = { version = "1.44", features = ["full"] }
 uuid = { version = "1.15", features = ["serde"] }
 socket2 = "0.5"
 byteorder = "1.5"
