@@ -36,7 +36,7 @@ querystring = "1.1"
 
 # Cryptography
 rsa = "0.9"
-rand = "0.8"
+rand = "0.9"
 sha1 = "0.10"
 aes = "0.7"
 cfb8 = "0.7"
