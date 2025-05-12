@@ -47,7 +47,7 @@ pub async fn run_analytics(server: Arc<ServerState>) {
         }
         let country_string = by_country
             .into_iter()
-            .map(|(country, count)| format!("{}:{count}", country))
+            .map(|(country, count)| format!("{country}:{count}"))
             .collect::<Vec<String>>()
             .join(";");
         catch! {

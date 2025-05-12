@@ -28,7 +28,7 @@ impl IpInfoMap {
                     reqwest::get(url)
                         .await?
                         .bytes_stream()
-                        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)),
+                        .map_err(std::io::Error::other),
                 ))
                 .compat(),
             )

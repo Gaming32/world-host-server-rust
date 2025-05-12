@@ -109,7 +109,7 @@ pub async fn run_main_server(server: Arc<ServerState>) {
             if let Err(error) =
                 handle_connection(&state, read, write, addr.ip(), &mut connection).await
             {
-                info!("Connection {} closed due to {error}", addr);
+                info!("Connection {addr} closed due to {error}");
                 if let Some(connection) = &connection {
                     connection.close_error(error.to_string()).await;
                 }
