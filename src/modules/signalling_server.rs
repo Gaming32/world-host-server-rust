@@ -54,10 +54,8 @@ pub async fn run_signalling_server(server: Arc<ServerState>) {
         let server = server.clone();
         tokio::spawn(async move {
             let lookup_id = Uuid::from_bytes(signal);
-            if let Some(request) = server.port_lookups.lock().await.remove(&lookup_id) {
-                if let Some(connection) =
-                    server.connections.lock().await.by_id(request.source_client)
-                {
+            if let Some((_, request)) = server.port_lookups.remove(&lookup_id) {
+                if let Some(connection) = server.connections.by_id(request.source_client) {
                     // If it's already been closed, well there's nothing we can do about it
                     let _ = connection
                         .send_message(&WorldHostS2CMessage::PortLookupSuccess {
@@ -80,14 +78,12 @@ async fn cleanup_expired_punch_requests(server: &ServerState) {
             lookups.remove().unwrap();
             if server
                 .port_lookups
-                .lock()
-                .await
                 .remove(&request.lookup_id)
                 .is_none()
             {
                 continue;
             }
-            if let Some(connection) = server.connections.lock().await.by_id(request.source_client) {
+            if let Some(connection) = server.connections.by_id(request.source_client) {
                 let _ = connection
                     .send_message(&WorldHostS2CMessage::CancelPortLookup {
                         lookup_id: request.lookup_id,

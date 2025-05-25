@@ -7,10 +7,10 @@ use crate::modules::proxy_server::run_proxy_server;
 use crate::modules::signalling_server::run_signalling_server;
 use crate::protocol::port_lookup::ActivePortLookup;
 use crate::SERVER_VERSION;
+use dashmap::DashMap;
 use linked_hash_set::LinkedHashSet;
 use log::{info, warn};
 use queues::Queue;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
@@ -34,14 +34,14 @@ pub struct FullServerConfig {
 pub struct ServerState {
     pub config: FullServerConfig,
 
-    pub connections: Mutex<ConnectionSet>,
+    pub connections: ConnectionSet,
 
-    pub proxy_connections: Mutex<HashMap<u64, (ConnectionId, Mutex<OwnedWriteHalf>)>>,
+    pub proxy_connections: DashMap<u64, (ConnectionId, Mutex<OwnedWriteHalf>)>,
 
-    pub remembered_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
-    pub received_friend_requests: Mutex<HashMap<Uuid, LinkedHashSet<Uuid>>>,
+    pub remembered_friend_requests: DashMap<Uuid, LinkedHashSet<Uuid>>,
+    pub received_friend_requests: DashMap<Uuid, LinkedHashSet<Uuid>>,
 
-    pub port_lookups: Mutex<HashMap<Uuid, ActivePortLookup>>,
+    pub port_lookups: DashMap<Uuid, ActivePortLookup>,
     pub port_lookup_by_expiry: Mutex<Queue<(Instant, ActivePortLookup)>>,
 }
 
@@ -50,14 +50,14 @@ impl ServerState {
         Self {
             config,
 
-            connections: Mutex::new(ConnectionSet::new()),
+            connections: ConnectionSet::new(),
 
-            proxy_connections: Mutex::new(HashMap::new()),
+            proxy_connections: DashMap::new(),
 
-            remembered_friend_requests: Mutex::new(HashMap::new()),
-            received_friend_requests: Mutex::new(HashMap::new()),
+            remembered_friend_requests: DashMap::new(),
+            received_friend_requests: DashMap::new(),
 
-            port_lookups: Mutex::new(HashMap::new()),
+            port_lookups: DashMap::new(),
             port_lookup_by_expiry: Mutex::new(Queue::new()),
         }
     }

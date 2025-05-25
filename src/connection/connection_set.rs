@@ -1,50 +1,47 @@
 use crate::connection::connection_id::ConnectionId;
 use crate::connection::Connection;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use dashmap::mapref::multiple::RefMulti;
+use dashmap::mapref::one::Ref;
+use dashmap::DashMap;
 use uuid::Uuid;
 
-pub type SafeConnectionList = Arc<Mutex<Vec<Connection>>>;
-
 pub struct ConnectionSet {
-    connections: HashMap<ConnectionId, Connection>,
-    connections_by_user_id: HashMap<Uuid, SafeConnectionList>,
+    connections: DashMap<ConnectionId, Connection>,
+    connections_by_user_id: DashMap<Uuid, Vec<Connection>>,
 }
 
 impl ConnectionSet {
     pub fn new() -> Self {
         Self {
-            connections: HashMap::new(),
-            connections_by_user_id: HashMap::new(),
+            connections: DashMap::new(),
+            connections_by_user_id: DashMap::new(),
         }
     }
 
-    pub fn by_id(&self, id: ConnectionId) -> Option<&Connection> {
+    pub fn by_id(&self, id: ConnectionId) -> Option<Ref<ConnectionId, Connection>> {
         self.connections.get(&id)
     }
 
     pub fn by_user_id(&self, user_id: Uuid) -> Vec<Connection> {
         match self.connections_by_user_id.get(&user_id) {
-            Some(connections) => connections.clone().lock().unwrap().clone(),
+            Some(connections) => connections.value().clone(),
             None => Vec::default(),
         }
     }
 
-    pub fn add(&mut self, connection: Connection) -> bool {
+    pub fn add(&self, connection: Connection) -> bool {
         if self.connections.contains_key(&connection.id) {
             return false;
         }
         self.add_force(connection)
     }
 
-    pub fn add_force(&mut self, connection: Connection) -> bool {
+    pub fn add_force(&self, connection: Connection) -> bool {
         let old = self.connections.insert(connection.id, connection.clone());
-        let by_uuid_arc = self
+        let mut by_uuid = self
             .connections_by_user_id
             .entry(connection.user_uuid)
-            .or_insert_with(|| Arc::new(Mutex::new(Vec::new())))
-            .clone();
-        let mut by_uuid = by_uuid_arc.lock().unwrap();
+            .or_insert_with(|| Vec::new());
         if let Some(old) = old {
             if let Some(old_pos) = by_uuid.iter().position(|x| x.id == old.id) {
                 by_uuid.swap_remove(old_pos);
@@ -54,11 +51,10 @@ impl ConnectionSet {
         true
     }
 
-    pub fn remove(&mut self, connection: &Connection) {
+    pub fn remove(&self, connection: &Connection) {
         self.connections.remove(&connection.id);
         let remove =
-            if let Some(by_uuid_arc) = self.connections_by_user_id.get(&connection.user_uuid) {
-                let mut by_uuid = by_uuid_arc.lock().unwrap();
+            if let Some(mut by_uuid) = self.connections_by_user_id.get_mut(&connection.user_uuid) {
                 if let Some(old_pos) = by_uuid.iter().position(|x| x.id == connection.id) {
                     by_uuid.swap_remove(old_pos);
                 }
@@ -75,7 +71,7 @@ impl ConnectionSet {
         self.connections.len()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Connection> {
-        self.connections.values()
+    pub fn iter(&self) -> impl Iterator<Item = RefMulti<ConnectionId, Connection>> {
+        self.connections.iter()
     }
 }
