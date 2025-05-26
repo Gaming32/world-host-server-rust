@@ -32,7 +32,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio::task::yield_now;
-use tokio::time::{interval_at, Instant, MissedTickBehavior};
+use tokio::time::{Instant, MissedTickBehavior, interval_at};
 use uuid::Uuid;
 
 pub async fn run_main_server(server: Arc<ServerState>) {
@@ -329,7 +329,8 @@ async fn handle_connection(
 async fn dequeue_friend_requests(connection: &Connection, server: &ServerState) -> io::Result<()> {
     let Some((_, received)) = server
         .received_friend_requests
-        .remove(&connection.user_uuid) else {
+        .remove(&connection.user_uuid)
+    else {
         return Ok(());
     };
     for received_from in received {
@@ -612,8 +613,7 @@ async fn verify_profile(
             VerifyProfileResult {
                 requested_uuid,
                 expected_uuid: offline_uuid,
-                mismatch_message:
-                    "Mismatched offline UUID. Some features may not work as intended.",
+                mismatch_message: "Mismatched offline UUID. Some features may not work as intended.",
                 mismatch_is_error: false,
                 include_uuid_info: true,
             }

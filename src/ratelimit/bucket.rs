@@ -57,6 +57,7 @@ impl<K: Eq + Hash + Copy> RateLimitBucket<K> {
     }
 
     pub(super) fn pump_limits(&self) {
-        self.entries.retain(|_, entry| entry.time.elapsed() < self.expiry)
+        self.entries
+            .retain(|_, entry| entry.time.elapsed() < self.expiry)
     }
 }

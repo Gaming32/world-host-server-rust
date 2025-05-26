@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use uuid::serde::simple;
 use uuid::Uuid;
+use uuid::serde::simple;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HasJoinedMinecraftServerResponse {

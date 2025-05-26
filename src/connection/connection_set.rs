@@ -1,8 +1,8 @@
-use crate::connection::connection_id::ConnectionId;
 use crate::connection::Connection;
+use crate::connection::connection_id::ConnectionId;
+use dashmap::DashMap;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::mapref::one::Ref;
-use dashmap::DashMap;
 use uuid::Uuid;
 
 pub struct ConnectionSet {
@@ -41,7 +41,7 @@ impl ConnectionSet {
         let mut by_uuid = self
             .connections_by_user_id
             .entry(connection.user_uuid)
-            .or_insert_with(|| Vec::new());
+            .or_default();
         if let Some(old) = old {
             if let Some(old_pos) = by_uuid.iter().position(|x| x.id == old.id) {
                 by_uuid.swap_remove(old_pos);

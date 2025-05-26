@@ -5,7 +5,6 @@ use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::protocol::security::SecurityLevel;
 use crate::server_state::ServerState;
 use crate::util::{add_with_circle_limit, remove_double_key};
-use linked_hash_set::LinkedHashSet;
 use log::warn;
 use queues::IsQueue;
 use tokio::io::AsyncWriteExt;
@@ -47,7 +46,7 @@ pub async fn handle_message(
                     let mut my_requests = server
                         .remembered_friend_requests
                         .entry(connection.user_uuid)
-                        .or_insert_with(LinkedHashSet::new);
+                        .or_default();
                     add_with_circle_limit(&mut my_requests, to_user, 5)
                 };
                 let removed_received = {
@@ -58,10 +57,8 @@ pub async fn handle_message(
                             &connection.user_uuid,
                         );
                     }
-                    let mut my_remembered = server
-                        .received_friend_requests
-                        .entry(to_user)
-                        .or_insert_with(LinkedHashSet::new);
+                    let mut my_remembered =
+                        server.received_friend_requests.entry(to_user).or_default();
                     add_with_circle_limit(&mut my_remembered, connection.user_uuid, 10)
                 };
                 if let Some(removed_received) = removed_received {

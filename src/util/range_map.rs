@@ -32,7 +32,9 @@ impl<K: Copy + Debug + Ord, V: Copy> RangeMap<K, V> {
             let prev_max = self.key[prev_index + 1];
             if min <= prev_max {
                 let prev_min = self.key[prev_index];
-                error!("Range {min:?}..={max:?} isn't greater than previous max range {prev_min:?}..={prev_max:?}");
+                error!(
+                    "Range {min:?}..={max:?} isn't greater than previous max range {prev_min:?}..={prev_max:?}"
+                );
                 return;
             }
         }

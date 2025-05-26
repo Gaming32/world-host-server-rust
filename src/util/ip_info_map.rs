@@ -1,6 +1,6 @@
 use crate::lat_long::LatitudeLongitude;
 use crate::util::ip_info::IpInfo;
-use crate::util::range_map::{U128ToU32RangeMap, U32ToU32RangeMap};
+use crate::util::range_map::{U32ToU32RangeMap, U128ToU32RangeMap};
 use async_compression::tokio::bufread::GzipDecoder;
 use futures::{StreamExt, TryStreamExt};
 use log::error;

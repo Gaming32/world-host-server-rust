@@ -1,5 +1,5 @@
-use crate::connection::connection_id::ConnectionId;
 use crate::connection::Connection;
+use crate::connection::connection_id::ConnectionId;
 use crate::json_data::ExternalProxy;
 use crate::protocol::s2c_message::WorldHostS2CMessage;
 use crate::server_state::{FullServerConfig, ServerState};
@@ -14,7 +14,7 @@ use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use tokio_util::bytes::Buf;
 
 pub async fn run_proxy_server(server: Arc<ServerState>) {
@@ -62,8 +62,12 @@ fn check_for_fallback_message(servers: &[Arc<ExternalProxy>]) {
     if servers.iter().any(|p| p.addr.is_none()) {
         return;
     }
-    info!("Same-process proxy server is enabled, but it is not present in external_proxies.json. This means");
-    info!("that it will be used only as a fallback if the client's best choice for external proxy goes down.");
+    info!(
+        "Same-process proxy server is enabled, but it is not present in external_proxies.json. This means"
+    );
+    info!(
+        "that it will be used only as a fallback if the client's best choice for external proxy goes down."
+    );
 }
 
 async fn handle_proxy_connection(

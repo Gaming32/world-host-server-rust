@@ -1,6 +1,6 @@
 use aes::Aes128;
-use cfb8::cipher::NewCipher;
 use cfb8::Cfb8;
+use cfb8::cipher::NewCipher;
 use log::error;
 use rsa::pkcs8::EncodePublicKey;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};

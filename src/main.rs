@@ -23,8 +23,8 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::process::exit;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{fs, io};
 use tokio::time::sleep;
 
@@ -50,8 +50,12 @@ fn main() {
                 if base_addr.is_none() {
                     base_addr = server.base_addr.clone();
                 } else {
-                    info!("Both the CLI and external_proxies.json specify baseAddr for the local server.");
-                    info!("--base-addr from the CLI will override the value in external_proxies.json.");
+                    info!(
+                        "Both the CLI and external_proxies.json specify baseAddr for the local server."
+                    );
+                    info!(
+                        "--base-addr from the CLI will override the value in external_proxies.json."
+                    );
                 }
                 break;
             }

@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use tokio::time::{interval_at, Instant, MissedTickBehavior};
+use tokio::time::{Instant, MissedTickBehavior, interval_at};
 use try_catch::catch;
 
 pub async fn run_analytics(server: Arc<ServerState>) {

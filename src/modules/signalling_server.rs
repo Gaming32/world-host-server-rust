@@ -7,7 +7,7 @@ use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
-use tokio::time::{interval_at, Instant, MissedTickBehavior};
+use tokio::time::{Instant, MissedTickBehavior, interval_at};
 use uuid::Uuid;
 
 pub async fn run_signalling_server(server: Arc<ServerState>) {
@@ -76,11 +76,7 @@ async fn cleanup_expired_punch_requests(server: &ServerState) {
     while let Ok((expiry, request)) = lookups.peek() {
         if time > expiry {
             lookups.remove().unwrap();
-            if server
-                .port_lookups
-                .remove(&request.lookup_id)
-                .is_none()
-            {
+            if server.port_lookups.remove(&request.lookup_id).is_none() {
                 continue;
             }
             if let Some(connection) = server.connections.by_id(request.source_client) {
