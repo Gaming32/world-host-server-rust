@@ -48,7 +48,7 @@ md-5 = "0.10"
 
 # Application
 tokio = { version = "1.47", features = ["full"] }
-uuid = { version = "1.17", features = ["serde"] }
+uuid = { version = "1.18", features = ["serde"] }
 socket2 = "0.6"
 byteorder = "1.5"
 linked_hash_set = "0.1"
