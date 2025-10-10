@@ -45,10 +45,10 @@ impl ConnectionSet {
             .or_insert_with(|| Arc::new(Mutex::new(Vec::new())))
             .clone();
         let mut by_uuid = by_uuid_arc.lock().unwrap();
-        if let Some(old) = old {
-            if let Some(old_pos) = by_uuid.iter().position(|x| x.id == old.id) {
-                by_uuid.swap_remove(old_pos);
-            }
+        if let Some(old) = old
+            && let Some(old_pos) = by_uuid.iter().position(|x| x.id == old.id)
+        {
+            by_uuid.swap_remove(old_pos);
         }
         by_uuid.push(connection);
         true

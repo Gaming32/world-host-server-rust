@@ -257,25 +257,24 @@ async fn handle_connection(
 
     if let Some(ip_info) = state.ip_info_map.get(remote_addr) {
         connection.state.lock().await.country = Some(ip_info.country);
-        if let Some(external_servers) = &state.server.config.external_servers {
-            if let Some(proxy) = external_servers.iter().min_by(|a, b| {
+        if let Some(external_servers) = &state.server.config.external_servers
+            && let Some(proxy) = external_servers.iter().min_by(|a, b| {
                 f64::total_cmp(
                     &a.lat_long.haversine_distance(&ip_info.lat_long),
                     &b.lat_long.haversine_distance(&ip_info.lat_long),
                 )
-            }) {
-                if let Some(addr) = &proxy.addr {
-                    connection.state.lock().await.external_proxy = Some(proxy.clone());
-                    connection
-                        .send_message(&WorldHostS2CMessage::ExternalProxyServer {
-                            host: addr.clone(),
-                            port: proxy.port,
-                            base_addr: proxy.base_addr.clone().unwrap_or_else(|| addr.clone()),
-                            mc_port: proxy.mc_port,
-                        })
-                        .await?;
-                }
-            }
+            })
+            && let Some(addr) = &proxy.addr
+        {
+            connection.state.lock().await.external_proxy = Some(proxy.clone());
+            connection
+                .send_message(&WorldHostS2CMessage::ExternalProxyServer {
+                    host: addr.clone(),
+                    port: proxy.port,
+                    base_addr: proxy.base_addr.clone().unwrap_or_else(|| addr.clone()),
+                    mc_port: proxy.mc_port,
+                })
+                .await?;
         }
     }
 
@@ -286,14 +285,14 @@ async fn handle_connection(
             {
                 let mut connections = connections.lock().await;
                 let other = connections.by_id(connection.id);
-                if let Some(other) = other {
-                    if other.addr == connection.addr {
-                        other
-                            .close_error("Connection ID taken by same IP".to_string())
-                            .await;
-                        connections.add_force(connection.clone());
-                        break;
-                    }
+                if let Some(other) = other
+                    && other.addr == connection.addr
+                {
+                    other
+                        .close_error("Connection ID taken by same IP".to_string())
+                        .await;
+                    connections.add_force(connection.clone());
+                    break;
                 }
             }
             if start.elapsed() > Duration::from_millis(500) {
@@ -333,8 +332,7 @@ async fn dequeue_friend_requests(connection: &Connection, server: &ServerState) 
         .received_friend_requests
         .lock()
         .await
-        .remove(&connection.user_uuid)
-    ;
+        .remove(&connection.user_uuid);
     if received.is_none() {
         return Ok(());
     }
