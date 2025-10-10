@@ -1,9 +1,15 @@
 version: 2
 updates:
+  - package-ecosystem: rust-toolchain
+    directory: /
+    schedule:
+      interval: weekly
+      day: friday
   - package-ecosystem: cargo
     directory: /
     schedule:
       interval: weekly
+      day: friday
   - package-ecosystem: github-actions
     directory: /
     schedule:
