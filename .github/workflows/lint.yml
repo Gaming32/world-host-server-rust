@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: rustup toolchain install stable --profile minimal
+      - run: cargo -V
       - uses: Swatinem/rust-cache@v2
       - name: Check rustfmt
         run: cargo fmt --check
