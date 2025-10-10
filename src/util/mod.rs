@@ -1,5 +1,5 @@
-use dashmap::DashMap;
 use linked_hash_set::LinkedHashSet;
+use std::collections::HashMap;
 use std::hash::Hash;
 
 pub mod ip_info;
@@ -15,11 +15,11 @@ pub fn copy_to_fixed_size<T: Default + Copy, const N: usize>(data: &[T]) -> [T; 
 }
 
 pub fn remove_double_key<A: Hash + Eq, B: Hash + Eq>(
-    map: &DashMap<A, LinkedHashSet<B>>,
+    map: &mut HashMap<A, LinkedHashSet<B>>,
     a: &A,
     b: &B,
 ) {
-    if let Some(mut sub) = map.get_mut(a) {
+    if let Some(sub) = map.get_mut(a) {
         sub.remove(b);
         if sub.is_empty() {
             map.remove(a);

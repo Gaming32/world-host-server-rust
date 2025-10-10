@@ -1,6 +1,7 @@
 use crate::ratelimit::error::RateLimited;
-use dashmap::{DashMap, Entry};
+use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
@@ -8,7 +9,7 @@ pub struct RateLimitBucket<K: Eq + Hash + Copy> {
     name: String,
     max_count: u32,
     expiry: Duration,
-    entries: DashMap<K, RateLimitEntry>,
+    entries: Mutex<HashMap<K, RateLimitEntry>>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -23,41 +24,45 @@ impl<K: Eq + Hash + Copy> RateLimitBucket<K> {
             name,
             max_count,
             expiry,
-            entries: DashMap::new(),
+            entries: Mutex::new(HashMap::new()),
         }
     }
 
     pub fn ratelimit(&self, key: K) -> Option<RateLimited> {
+        let mut entries = self.entries.lock().unwrap();
+        let entry = entries.get(&key);
         let current_time = Instant::now();
-        let entry = self.entries.entry(key);
-        let value = match &entry {
-            Entry::Occupied(v) => Some(v.get()),
-            Entry::Vacant(_) => None,
-        };
-        if value.is_none() || current_time - value.unwrap().time >= self.expiry {
-            entry.insert(RateLimitEntry {
-                time: current_time,
-                count: 1,
-            });
+        if entry.is_none() || current_time - entry.unwrap().time >= self.expiry {
+            entries.insert(
+                key,
+                RateLimitEntry {
+                    time: current_time,
+                    count: 1,
+                },
+            );
             return None;
         }
-        let value = *value.unwrap();
-        if value.count < self.max_count {
-            entry.insert(RateLimitEntry {
-                time: current_time,
-                count: value.count + 1,
-            });
+        let entry = *entry.unwrap();
+        if entry.count < self.max_count {
+            entries.insert(
+                key,
+                RateLimitEntry {
+                    time: current_time,
+                    count: entry.count + 1,
+                },
+            );
             return None;
         }
-        drop(entry);
         Some(RateLimited::new(
             self.name.to_string(),
-            value.time - current_time + self.expiry,
+            entry.time - current_time + self.expiry,
         ))
     }
 
     pub(super) fn pump_limits(&self) {
         self.entries
+            .lock()
+            .unwrap()
             .retain(|_, entry| entry.time.elapsed() < self.expiry)
     }
 }

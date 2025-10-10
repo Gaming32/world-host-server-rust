@@ -25,6 +25,7 @@ use rsa::pkcs8::EncodePublicKey;
 use std::collections::HashSet;
 use std::io;
 use std::net::IpAddr;
+use std::ops::DerefMut;
 use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
@@ -115,7 +116,7 @@ pub async fn run_main_server(server: Arc<ServerState>) {
             }
             if let Some(connection) = connection {
                 info!("Connection {} from {} closed", connection.id, addr);
-                state.server.connections.remove(&connection);
+                state.server.connections.lock().await.remove(&connection);
                 // Inlining this variable will cause the lock to not be dropped, causing a deadlock in handle_message
                 let friends: Vec<Uuid> = connection
                     .state
@@ -133,7 +134,7 @@ pub async fn run_main_server(server: Arc<ServerState>) {
                 .await;
                 info!(
                     "There are {} open connections.",
-                    state.server.connections.len()
+                    state.server.connections.lock().await.len()
                 );
             }
         });
@@ -281,8 +282,9 @@ async fn handle_connection(
     {
         let start = Instant::now();
         let connections = &state.server.connections;
-        while !connections.add(connection.clone()) {
+        while !connections.lock().await.add(connection.clone()) {
             {
+                let mut connections = connections.lock().await;
                 let other = connections.by_id(connection.id);
                 if let Some(other) = other {
                     if other.addr == connection.addr {
@@ -310,7 +312,7 @@ async fn handle_connection(
 
     info!(
         "There are {} open connections",
-        state.server.connections.len()
+        state.server.connections.lock().await.len()
     );
 
     dequeue_friend_requests(&connection, &state.server).await?;
@@ -327,12 +329,17 @@ async fn handle_connection(
 }
 
 async fn dequeue_friend_requests(connection: &Connection, server: &ServerState) -> io::Result<()> {
-    let Some((_, received)) = server
+    let received = server
         .received_friend_requests
+        .lock()
+        .await
         .remove(&connection.user_uuid)
-    else {
+    ;
+    if received.is_none() {
         return Ok(());
-    };
+    }
+    let received = received.unwrap();
+    let mut remembered = server.remembered_friend_requests.lock().await;
     for received_from in received {
         connection
             .send_message(&WorldHostS2CMessage::FriendRequest {
@@ -341,7 +348,7 @@ async fn dequeue_friend_requests(connection: &Connection, server: &ServerState) 
             })
             .await?;
         remove_double_key(
-            &server.remembered_friend_requests,
+            remembered.deref_mut(),
             &received_from,
             &connection.user_uuid,
         );

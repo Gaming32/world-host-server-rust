@@ -7,6 +7,7 @@ use crate::server_state::ServerState;
 use crate::util::{add_with_circle_limit, remove_double_key};
 use log::warn;
 use queues::IsQueue;
+use std::ops::DerefMut;
 use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -34,7 +35,7 @@ pub async fn handle_message(
                 from_user: connection.user_uuid,
                 security: connection.security_level(),
             };
-            let other_connections = server.connections.by_user_id(to_user);
+            let other_connections = server.connections.lock().await.by_user_id(to_user);
             if !other_connections.is_empty() {
                 for other in other_connections {
                     if other.id != connection.id {
@@ -43,27 +44,28 @@ pub async fn handle_message(
                 }
             } else if connection.security_level() > SecurityLevel::Insecure {
                 let removed_remembered = {
-                    let mut my_requests = server
-                        .remembered_friend_requests
+                    let mut remembered = server.remembered_friend_requests.lock().await;
+                    let my_requests = remembered
                         .entry(connection.user_uuid)
                         .or_default();
-                    add_with_circle_limit(&mut my_requests, to_user, 5)
+                    add_with_circle_limit(my_requests, to_user, 5)
                 };
                 let removed_received = {
+                    let mut received = server.received_friend_requests.lock().await;
                     if let Some(removed_remembered) = removed_remembered {
                         remove_double_key(
-                            &server.received_friend_requests,
+                            received.deref_mut(),
                             &removed_remembered,
                             &connection.user_uuid,
                         );
                     }
-                    let mut my_remembered =
-                        server.received_friend_requests.entry(to_user).or_default();
-                    add_with_circle_limit(&mut my_remembered, connection.user_uuid, 10)
+                    let  my_remembered =
+                        received.entry(to_user).or_default();
+                    add_with_circle_limit(my_remembered, connection.user_uuid, 10)
                 };
                 if let Some(removed_received) = removed_received {
                     remove_double_key(
-                        &server.remembered_friend_requests,
+                        server.remembered_friend_requests.lock().await.deref_mut(),
                         &removed_received,
                         &to_user,
                     );
@@ -118,7 +120,7 @@ pub async fn handle_message(
                 }).await;
                 return;
             }
-            let online = server.connections.by_user_id(friend);
+            let online = server.connections.lock().await.by_user_id(friend);
             if !online.is_empty() {
                 if let Some(last) = online.last() {
                     send_safely(
@@ -152,8 +154,8 @@ pub async fn handle_message(
                 return;
             }
             if connection_id != connection.id {
-                if let Some(other) = server.connections.by_id(connection_id) {
-                    send_safely(connection, &other, &response.unwrap()).await;
+                if let Some(other) = server.connections.lock().await.by_id(connection_id) {
+                    send_safely(connection, other, &response.unwrap()).await;
                 }
             }
         }
@@ -188,8 +190,7 @@ pub async fn handle_message(
             connection_id,
             data,
         } => {
-            if let Some(proxy_connection) = server.proxy_connections.get(&connection_id) {
-                let (cid, socket) = proxy_connection.value();
+            if let Some((cid, socket)) = server.proxy_connections.lock().await.get(&connection_id) {
                 if *cid == connection.id {
                     let mut socket = socket.lock().await;
                     // Socket may be disconnected. Let the receiver deal with that.
@@ -199,8 +200,7 @@ pub async fn handle_message(
             }
         }
         ProxyDisconnect { connection_id } => {
-            if let Some(proxy_connection) = server.proxy_connections.get(&connection_id) {
-                let (cid, socket) = proxy_connection.value();
+            if let Some((cid, socket)) = server.proxy_connections.lock().await.get(&connection_id) {
                 if *cid == connection.id {
                     // Socket may already be shutdown. That's the receiver's job to handle.
                     let _ = socket.lock().await.shutdown().await;
@@ -209,10 +209,10 @@ pub async fn handle_message(
         }
         RequestDirectJoin { connection_id } => {
             if connection_id != connection.id {
-                if let Some(other) = server.connections.by_id(connection_id) {
+                if let Some(other) = server.connections.lock().await.by_id(connection_id) {
                     send_safely(
                         connection,
-                        &other,
+                        other,
                         &WorldHostS2CMessage::RequestJoin {
                             user: connection.user_uuid,
                             connection_id: connection.id,
@@ -237,10 +237,10 @@ pub async fn handle_message(
             if connection_id == connection.id {
                 return;
             }
-            if let Some(other) = server.connections.by_id(connection_id) {
+            if let Some(other) = server.connections.lock().await.by_id(connection_id) {
                 send_safely(
                     connection,
-                    &other,
+                    other,
                     &if other.protocol_version < 5 {
                         #[allow(deprecated)]
                         WorldHostS2CMessage::QueryResponse {
@@ -267,7 +267,7 @@ pub async fn handle_message(
             my_local_host: _,
             my_local_port: _,
         } => {
-            if let Some(target_client) = server.connections.by_id(target_connection) {
+            if let Some(target_client) = server.connections.lock().await.by_id(target_connection) {
                 if target_client.protocol_version < 7 {
                     send_safely(
                         connection,
@@ -279,7 +279,7 @@ pub async fn handle_message(
                 }
                 send_safely(
                     connection,
-                    &target_client,
+                    target_client,
                     &WorldHostS2CMessage::PunchOpenRequest {
                         punch_id,
                         purpose,
@@ -304,10 +304,10 @@ pub async fn handle_message(
             target_connection,
             punch_id,
         } => {
-            if let Some(target) = server.connections.by_id(target_connection) {
+            if let Some(target) = server.connections.lock().await.by_id(target_connection) {
                 send_safely(
                     connection,
-                    &target,
+                    target,
                     &WorldHostS2CMessage::PunchRequestCancelled { punch_id },
                 )
                 .await;
@@ -318,7 +318,7 @@ pub async fn handle_message(
                 lookup_id,
                 source_client: connection.id,
             };
-            server.port_lookups.insert(lookup_id, request);
+            server.port_lookups.lock().await.insert(lookup_id, request);
             server
                 .port_lookup_by_expiry
                 .lock()
@@ -332,10 +332,10 @@ pub async fn handle_message(
             host,
             port,
         } => {
-            if let Some(target) = server.connections.by_id(connection_id) {
+            if let Some(target) = server.connections.lock().await.by_id(connection_id) {
                 send_safely(
                     connection,
-                    &target,
+                    target,
                     &WorldHostS2CMessage::PunchSuccess {
                         punch_id,
                         host,
@@ -355,7 +355,7 @@ async fn broadcast_to_friends(
     message: WorldHostS2CMessage,
 ) {
     for friend in friends {
-        for other in server.connections.by_user_id(friend) {
+        for other in server.connections.lock().await.by_user_id(friend) {
             if other.id != connection.id {
                 send_safely(connection, &other, &message).await;
             }

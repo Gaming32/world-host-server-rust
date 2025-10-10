@@ -83,7 +83,7 @@ async fn handle_proxy_connection(
     {
         info!("Closing proxy connection {connection_id} due to {error}");
     }
-    server.proxy_connections.remove(&connection_id);
+    server.proxy_connections.lock().await.remove(&connection_id);
     if let Some(connection) = connection {
         // Same as above
         let _ = connection
@@ -111,7 +111,8 @@ async fn handle_inner(
     } = handshake_result.unwrap();
 
     let mut connection = {
-        let connection = server.connections.by_id(dest_cid);
+        let connections = server.connections.lock().await;
+        let connection = connections.by_id(dest_cid);
         if connection.is_none() {
             return disconnect(
                 &mut socket,
@@ -127,6 +128,8 @@ async fn handle_inner(
     let (mut read, write) = socket.into_split();
     server
         .proxy_connections
+        .lock()
+        .await
         .insert(connection_id, (dest_cid, Mutex::new(write)));
 
     connection
@@ -168,9 +171,11 @@ async fn handle_inner(
             drop(result);
             let failed = loop {
                 sleep(Duration::from_millis(50)).await;
-                if let Some(new_connection) = server.connections.by_id(dest_cid) {
+                if let Some(new_connection) =
+                    server.connections.lock().await.by_id(dest_cid).cloned()
+                {
                     *connection_out = Some(new_connection.clone());
-                    connection = new_connection.clone();
+                    connection = new_connection;
                     break false;
                 }
                 if send_start.elapsed() > Duration::from_secs(5) {

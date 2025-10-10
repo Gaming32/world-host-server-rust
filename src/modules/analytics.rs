@@ -35,7 +35,7 @@ pub async fn run_analytics(server: Arc<ServerState>) {
         let mut total = 0;
         let mut by_country = HashMap::new();
         {
-            for connection in server.connections.iter() {
+            for connection in server.connections.lock().await.iter() {
                 if let Some(country) = connection.state.lock().await.country {
                     by_country
                         .entry(country)
