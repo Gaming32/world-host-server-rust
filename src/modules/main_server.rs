@@ -592,7 +592,8 @@ async fn verify_profile(
                 mismatch_message: concat!(
                     "Failed to verify username. ",
                     "Please restart your game and the launcher. ",
-                    "If you're unable to join regular Minecraft servers, this is not a bug with World Host.",
+                    "If you're unable to join regular public Minecraft servers, this is not a bug with World Host. ",
+                    "Specifically if you're using a pirated/cracked/non-premium account, such as with TLauncher, DO NOT ask for support.",
                 ),
                 mismatch_is_error: true,
                 include_uuid_info: false,
