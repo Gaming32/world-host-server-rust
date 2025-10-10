@@ -100,12 +100,12 @@ impl WorldHostC2SMessage {
             invalid_data!("Received message with unknown typeId from client: {id}");
         }
         let first_protocol = first_protocol.unwrap();
-        if let Some(max_protocol) = max_protocol_version {
-            if first_protocol > max_protocol {
-                invalid_data!(
-                    "Received too new message from client. Client has version {max_protocol}, but message ID {id} was added in {first_protocol}."
-                );
-            }
+        if let Some(max_protocol) = max_protocol_version
+            && first_protocol > max_protocol
+        {
+            invalid_data!(
+                "Received too new message from client. Client has version {max_protocol}, but message ID {id} was added in {first_protocol}."
+            );
         }
         Self::parse_raw(id, &mut Cursor::new(data))
     }

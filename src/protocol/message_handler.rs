@@ -45,9 +45,7 @@ pub async fn handle_message(
             } else if connection.security_level() > SecurityLevel::Insecure {
                 let removed_remembered = {
                     let mut remembered = server.remembered_friend_requests.lock().await;
-                    let my_requests = remembered
-                        .entry(connection.user_uuid)
-                        .or_default();
+                    let my_requests = remembered.entry(connection.user_uuid).or_default();
                     add_with_circle_limit(my_requests, to_user, 5)
                 };
                 let removed_received = {
@@ -59,8 +57,7 @@ pub async fn handle_message(
                             &connection.user_uuid,
                         );
                     }
-                    let  my_remembered =
-                        received.entry(to_user).or_default();
+                    let my_remembered = received.entry(to_user).or_default();
                     add_with_circle_limit(my_remembered, connection.user_uuid, 10)
                 };
                 if let Some(removed_received) = removed_received {
@@ -121,19 +118,19 @@ pub async fn handle_message(
                 return;
             }
             let online = server.connections.lock().await.by_user_id(friend);
-            if !online.is_empty() {
-                if let Some(last) = online.last() {
-                    send_safely(
-                        connection,
-                        last,
-                        &WorldHostS2CMessage::RequestJoin {
-                            user: connection.user_uuid,
-                            connection_id: connection.id,
-                            security: connection.security_level(),
-                        },
-                    )
-                    .await;
-                }
+            if !online.is_empty()
+                && let Some(last) = online.last()
+            {
+                send_safely(
+                    connection,
+                    last,
+                    &WorldHostS2CMessage::RequestJoin {
+                        user: connection.user_uuid,
+                        connection_id: connection.id,
+                        security: connection.security_level(),
+                    },
+                )
+                .await;
             }
         }
         JoinGranted {
@@ -153,10 +150,10 @@ pub async fn handle_message(
                 .await;
                 return;
             }
-            if connection_id != connection.id {
-                if let Some(other) = server.connections.lock().await.by_id(connection_id) {
-                    send_safely(connection, other, &response.unwrap()).await;
-                }
+            if connection_id != connection.id
+                && let Some(other) = server.connections.lock().await.by_id(connection_id)
+            {
+                send_safely(connection, other, &response.unwrap()).await;
             }
         }
         QueryRequest { friends } => {
@@ -190,38 +187,38 @@ pub async fn handle_message(
             connection_id,
             data,
         } => {
-            if let Some((cid, socket)) = server.proxy_connections.lock().await.get(&connection_id) {
-                if *cid == connection.id {
-                    let mut socket = socket.lock().await;
-                    // Socket may be disconnected. Let the receiver deal with that.
-                    let _ = socket.write_all(&data).await;
-                    let _ = socket.flush().await;
-                }
+            if let Some((cid, socket)) = server.proxy_connections.lock().await.get(&connection_id)
+                && *cid == connection.id
+            {
+                let mut socket = socket.lock().await;
+                // Socket may be disconnected. Let the receiver deal with that.
+                let _ = socket.write_all(&data).await;
+                let _ = socket.flush().await;
             }
         }
         ProxyDisconnect { connection_id } => {
-            if let Some((cid, socket)) = server.proxy_connections.lock().await.get(&connection_id) {
-                if *cid == connection.id {
-                    // Socket may already be shutdown. That's the receiver's job to handle.
-                    let _ = socket.lock().await.shutdown().await;
-                }
+            if let Some((cid, socket)) = server.proxy_connections.lock().await.get(&connection_id)
+                && *cid == connection.id
+            {
+                // Socket may already be shutdown. That's the receiver's job to handle.
+                let _ = socket.lock().await.shutdown().await;
             }
         }
         RequestDirectJoin { connection_id } => {
-            if connection_id != connection.id {
-                if let Some(other) = server.connections.lock().await.by_id(connection_id) {
-                    send_safely(
-                        connection,
-                        other,
-                        &WorldHostS2CMessage::RequestJoin {
-                            user: connection.user_uuid,
-                            connection_id: connection.id,
-                            security: connection.security_level(),
-                        },
-                    )
-                    .await;
-                    return;
-                }
+            if connection_id != connection.id
+                && let Some(other) = server.connections.lock().await.by_id(connection_id)
+            {
+                send_safely(
+                    connection,
+                    other,
+                    &WorldHostS2CMessage::RequestJoin {
+                        user: connection.user_uuid,
+                        connection_id: connection.id,
+                        security: connection.security_level(),
+                    },
+                )
+                .await;
+                return;
             }
             send_safely(
                 connection,
