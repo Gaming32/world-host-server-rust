@@ -10,7 +10,7 @@ chrono = "0.4"
 try-catch = "0.2"
 lazy_static = "1.5"
 case_insensitive_hashmap = "1.0"
-unicase = "2.8"
+unicase = "2.9"
 anyhow = "1.0"
 
 # Logging
